@@ -15,7 +15,7 @@ The following API functions are common APIs used by both the Certisfy signer and
     
     **Arguments**
 
-    - `dhExchange`\ 
+    - `dhExchange`\
       When initiating an exchange, ie playing role *Alice*, this object takes the form `{alice_public_key,alice_data}`.
       `alice_public_key` is the base64 encoded public key. `alice_data` is optional, it might include the receiver
       id, see [verifier](https://github.com/CipherTrustee/certisfy-verifier) for example usage.
