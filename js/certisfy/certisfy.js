@@ -463,10 +463,13 @@
         const dhKeyPair = useKeyPair?useKeyPair:(await certisfyCryptoUtil.aliceKeyGen("P-256"));
         let alice_data = receiverId?{"sp_uri":receiverId}:null;
 
-        const resp = await postDHExchange({
-            "alice_public_key":dhKeyPair.publicKeyBase64,
-            "alice_data":alice_data?JSON.stringify(alice_data):undefined
-        })
+      	let reqParams = {
+            "alice_public_key":dhKeyPair.publicKeyBase64
+        };
+      	if(alice_data)
+      		reqParams["alice_data"] = JSON.stringify(alice_data);
+
+        const resp = await postDHExchange(reqParams)
         
         if(resp.status == "success")
         {
@@ -493,7 +496,7 @@
            let verified = (skipReceiverIdVerification?true:(await certisfyCryptoUtil.ECDSA_SIGNER.verifyMessage(receiverIdAuth.publicKey,receiverIdAuth.auth_signature_string,receiverIdAuth.auth_signature)))
 
            let dhKey = await certisfyCryptoUtil.bobKeyGen(dhExchange.alice_public_key);
-           let spUri = alice_data && alice_data.sp_uri?alice_data.sp_uri:null;
+           let spUri = alice_data && alice_data.sp_uri && alice_data.sp_uri.length>0?alice_data.sp_uri:null;
 
            let dhxParams = [{"name":"pki-dhx-nonce","value":userCode+"-"+dhExchange.create_date}];
            let claimSig = await fnClaimProvider(dhxParams);
