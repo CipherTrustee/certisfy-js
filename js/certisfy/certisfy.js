@@ -1,15 +1,20 @@
-/***************************************Copyright 2026, Edmond Kemokai, pkijs example authors******************
-1. This code is provided as is without warranty of any kind. 
-2. You may modify it for your own use and only for verification of claims created via the Certisfy app. 
-   In other words, you may not use it to create a Certisfy alternative client.
-3. For verification of Certisfy claims, you are free to use it for both personal and commercial needs.
-4. You may not redistribute it with or without modifications.      
-**************************************************************************************************************/
+    /***************************************Copyright 2026, Edmond Kemokai, pkijs example authors******************
+    1. This code is provided as is without warranty of any kind. 
+    2. You may modify it for your own use and only for automated signing of claims or verification 
+       of claims created either via the Certisfy app or claims created via the Certisfy signer code included herein. 
+    3. You may not use it to create a Certisfy alternative client, ie a competing alternative to the Certisfy app.
+    4. For verification of Certisfy app claims, verification of claims created via the Certisfy signer (ie Certisfy claims), 
+       or automated signing of Certisfy claims, you are free to use it for both personal and commercial needs.
+    5. You may not redistribute it with or without modifications.
+    **************************************************************************************************************/
 
+	/************************************For browser environment*********************************************/
 	import * as asn1js from './crypto/asn1js.js';
     import * as pkijs from './crypto/pkijs.es.js';
     import * as hmacUtil from './crypto/hmac-util.js';
     import * as pvtsutils from './crypto/pvtsutils.js';
+	import * as certisfyCryptoUtil from './certisfy-crypto-util.js';
+	/********************************************************************************************************/
 
     /************************************For nodejs environment**********************************************
     import * as pkijs from 'pkijs';
@@ -17,6 +22,7 @@
 
     import * as hmacUtil from './crypto/hmac-util.js';
     import * as pvtsutils from './crypto/pvtsutils.js';
+    import * as certisfyCryptoUtil from './certisfy-crypto-util.js';
 
 	//import crypto from 'node:crypto';
     //Get the crypto extension
@@ -56,15 +62,18 @@
     };
 
     let clientApp;
-	let trustRoots=[ {
+	let trustRoots=[ 
+      {
       "finger_print" : "594e1fe91a54c5f9adaa8956fa79360346c18766",
       "cert_text" : "-----BEGIN CERTIFICATE-----\nMIIDZzCCAwygAwIBAgIBATAKBggqhkjOPQQDAjAVMRMwEQYDVQQDDApQcm9tZXRo\nZXVzMB4XDTI0MDExNTEzMDAyOFoXDTM0MDExNTEzMDAyOFowEDEOMAwGA1UEAwwF\nSHVtYW4wWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARi6BmjmSfz5KlOI0KXxkKL\nl7iYT+WZySxC7ImZgvAgY4ofyLU+LFvjjYu6+SQRH/XphtqNzeP6YMBDNLOY6AzZ\no4ICUDCCAkwwHQYDVR0OBBYEFFB00DwJh9ngK9xLHSa4EvWw8yOwMIICKQYDVR0R\nBIICIDCCAhyCggIYeyJwa2ktYXN5bS1lbmNyeXB0aW9uLWtleSI6Ii0tLS0tQkVH\nSU4gUFVCTElDIEtFWS0tLS0tXG5NSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9D\nQVE4QU1JSUJDZ0tDQVFFQTJ0TnpwczlVNVNqN3E1Sy9adWJKXHJcbkVoaDVrOG9Y\nNHc0Vnk2RVhHT1lvazZVSmU3YVJ5aTgwZnBiYTRJMUtmTWpKUW5PSjUzQ2pmZWdK\nVzVud2J0OUFcclxuVnY5N2lGa0xCZlVzOTF0eVJBeTFjRy90MWdZMDhOM05naUdH\nUXNTeEI1dDRTUXVGMHNPTFB3NHhVTWYzNktZNlxyXG5DejlBMlYyNjhuZE8rdFJi\nTDl5UXN2Uk13c3Brd2hpcDJOQjhyemZFYkJxNngvV05zeXM5NXA4aUo3VEJRNkh5\nXHJcbkhVTkJaWEJyRVJFRDc2ZmJ3V0R1UFRaZzRYY3RqMjV5T25KNEE0SGpjNFZY\nU1dFeFhZWk1aY21HVytzaW0yNzNcclxuMTFoZTlRNkMxckluNmdBU3B3ZnV0N2lr\nT2lER291VlR0Z0UwbnFtbnc0cTJ5SU52bDU3NHo4Qys4S0pvTlgzRFxyXG5zUUlE\nQVFBQlxuLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tXG4iLCJ1cmwiOiJodHRwczov\nL2NpcGhlcmVkdHJ1c3QuY29tIn0wCgYIKoZIzj0EAwIDSQAwRgIhAKcvou9BeWIm\nktwVPZsSS8NNhduA2RDuDNpKsJn4vW8ZAiEA/uVqXLYavURiOlvy8iUFqnI0chvG\ndJg96BTWTcaQy6A=\n-----END CERTIFICATE-----",
       "type" : "trust"
-    }, {
+    }, 
+    {
       "finger_print" : "319185e648597d0a3961787cd0eeb662bcc71fbb",
       "cert_text" : "-----BEGIN CERTIFICATE-----\nMIIDrDCCA1GgAwIBAgIBATAKBggqhkjOPQQDAjAzMTEwLwYDVQQDDCg1OTRlMWZl\nOTFhNTRjNWY5YWRhYTg5NTZmYTc5MzYwMzQ2YzE4NzY2MB4XDTI0MDExNTEzMjk1\nOVoXDTM0MDExNTEzMjk1OVowEDEOMAwGA1UEAwwFSHVtYW4wWTATBgcqhkjOPQIB\nBggqhkjOPQMBBwNCAARDJojKrWLeCyiATDV36E5uAdCrEqBx8ksfa6cWILOqiSA+\nNXX6+ZdMEaiBYS+CkuHkZbqYDj12hpwJ15tx/aido4ICdzCCAnMwHQYDVR0OBBYE\nFCjlboEQ74MW/LO2NXGE6MSAsyr0MIICUAYDVR0RBIICRzCCAkOCggI/eyJwa2kt\nYXN5bS1lbmNyeXB0aW9uLWtleSI6Ii0tLS0tQkVHSU4gUFVCTElDIEtFWS0tLS0t\nXG5NSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQXJh\nV2FkQStBRm8rd0lJUkErdGs1XHJcbkM3dkhVVUhTaEE5M2lzNXFPak5tZ0Y4Vm9H\nZFdMVWFPSmw0czZIOWpWNWhRazl1K0hsRTZnbU5YS0dZUThhVGVcclxueUFkYTVU\nS0dsYXpXL0tpUGZrR0VWZGhrbVdUci9OZmpwcDhmVU9kNDE5Z2Jrd0tXbGZQNmpC\nTU9TRWR3ZTJITFxyXG5SYysrRHVDeXo0dEpBMzNEbzBIVEpoM1BLRXVZU21pQWl4\nZkp2QmRBcWU5NFhDT0plNzEvWkdsM01yaUYyNHhoXHJcbjFEMDNwSGhNR2UxbTha\nWXpWS3dlVWNWbjNFd3ZGaTVMWEQwYUJhOTNYNHNVeWI3WjhEa2hpcWx2bnpyMHk2\nZGxcclxuSGFGNDFKVTg0R2l3cWRwdk5wODFhOTh3TTgxWXl3VzRFb2lTLzREdGNF\nTTh2eERpY3FUemxPT3pPWG0rZmxlVFxyXG5Id0lEQVFBQlxuLS0tLS1FTkQgUFVC\nTElDIEtFWS0tLS0tXG4iLCJ1cmwiOiJodHRwczovL2NpcGhlcmVkdHJ1c3QuY29t\nIiwiUHVycG9zZSI6IlRydXN0IEFuY2hvciBSZXZpZXdlciBSb290In0wCgYIKoZI\nzj0EAwIDSQAwRgIhAOI57dycLY5BMuIacyVJ36oBDAIvWs+gsDeMYshijLMRAiEA\n7mgqMCpW0uMkGx1P1SnUMqRfDaC+JvDm0eUtqWXGYNY=\n-----END CERTIFICATE-----",
       "type" : "reviewer"
-    } ];
+    } 
+    ];
 
     let trustChainRoot;
     const demoTrustAnchorFingerprint = "3e0cddfbd29f9bffcdc3c149fd768bab023fb96b";
@@ -83,7 +92,8 @@
 
     function setClientApp(app){
       clientApp = app;
-      API_PROXY_TARGET = app.pkiPlatformFullURL(API_PROXY_TARGET);
+      if(app.pkiPlatformFullURL)
+      	  API_PROXY_TARGET = app.pkiPlatformFullURL(API_PROXY_TARGET);
     }
 
     function setIdAnchorElements(elements){
@@ -223,6 +233,29 @@
 
     async function sha2HmacHex(hmacKey,message) {
        return hmacHex(hmacKey,await sha2Hex(message));
+    }
+
+    function formatTo2Digits(n){
+        return n<9?"0"+n:n;
+    }
+
+	function createClaimDateTime(claimDate,claimTime,defaultTime){
+      	if(claimDate && claimDate.length>0){
+            let localDateTime = new Date();
+            let validfromDateTime = claimDate;                  
+            localDateTime.setFullYear(parseInt(validfromDateTime.split("/")[2]),parseInt(validfromDateTime.split("/")[0])-1,parseInt(validfromDateTime.split("/")[1]));
+            validfromDateTime = formatTo2Digits(localDateTime.getUTCMonth()+1)+"/"+formatTo2Digits(localDateTime.getUTCDate())+"/"+localDateTime.getUTCFullYear();
+
+            if(claimTime && claimTime.length>0){//convert to UTC
+              localDateTime.setHours(parseInt(claimTime.split(":")[0].trim()));
+              localDateTime.setMinutes(parseInt(claimTime.split(":")[1].trim()));
+              validfromDateTime = validfromDateTime+" "+formatTo2Digits(localDateTime.getUTCHours())+":"+formatTo2Digits(localDateTime.getUTCMinutes());
+            }
+            else
+              validfromDateTime = validfromDateTime+(defaultTime && defaultTime.trim().length>0?" "+defaultTime:"");  
+
+            return validfromDateTime;
+        }
     }
 
     /* eslint-disable deprecation/deprecation */
@@ -379,20 +412,6 @@
 
   	async function pkiHMAC(args,pkiSpUri){
         return new Promise((resolve,reject)=>{
-          	  /*
-              $.ajax({url:API_PROXY_TARGET,
-                    data:{
-                      "action":"get-hmac",
-                      "hmac_call":JSON.stringify(args),
-                      "sp_uri":pkiSpUri
-                  },
-                  method:"POST",
-                  dataType:"json"
-             }).
-             done(function(hmac){
-                  resolve(hmac.hmac);
-             });
-             */
 			sendRequest({
               "action":"get-hmac",
               "hmac_call":JSON.stringify(args),
@@ -406,22 +425,6 @@
 
     async function getEmbededSignature(embed_id){
       return new Promise((resolve,reject)=>{
-            /*
-            $.ajax({url:API_PROXY_TARGET,
-                  data:{
-                    "action":"get-embedded-signature",
-                    "embed_id":embed_id
-                  },
-                  method:"POST",
-                  dataType:"json"
-            }).
-            done(function(signatureEmbed){
-                if(typeof signatureEmbed.status == "undefined" || signatureEmbed.status != "failure")
-					resolve(signatureEmbed);
-            	else
-                    resolve(null);
-            });
-            */
 			sendRequest({
               "action":"get-embedded-signature",
               "embed_id":embed_id
@@ -435,6 +438,77 @@
       });
     }
 
+    async function postDHExchange(params){
+        return new Promise((resolve,reject)=>{
+          	sendRequest(Object.assign({"action":"post-dh-exchange"},params)).
+            then(function(resp){
+				resolve(resp);
+            });
+        });
+    }
+
+    async function getDHExchange(userCode){
+        return new Promise((resolve,reject)=>{
+          	sendRequest({
+              "user_code":userCode,
+              "action":"get-dh-exchange"
+            }).
+            then(function(resp){
+				resolve(resp);
+            });
+        });
+    }
+
+    async function initiateDHExchange(receiverId,useKeyPair){
+        const dhKeyPair = useKeyPair?useKeyPair:(await certisfyCryptoUtil.aliceKeyGen("P-256"));
+        let alice_data = receiverId?{"sp_uri":receiverId}:null;
+
+        const resp = await postDHExchange({
+            "alice_public_key":dhKeyPair.publicKeyBase64,
+            "alice_data":alice_data?JSON.stringify(alice_data):null
+        })
+        
+        if(resp.status == "success")
+        {
+            return {
+              "status":"success",
+              "dhExchange":{
+              "create_date":new Date().getTime(),
+              "user_code":resp.userCode,
+              "private_key":dhKeyPair.privateKeyBase64
+            }}
+        }      
+        return resp; 
+    }
+
+    async function executeDHExchange(userCode,fnClaimProvider,useExchange){
+
+           const dhExchange = useExchange?useExchange:await getDHExchange(userCode);
+
+           let skipReceiverIdVerification = true;
+           let alice_data = dhExchange.alice_data?JSON.parse(dhExchange.alice_data):null;
+           //let receiverIdAuth = JSON.parse(dhExchange.alice_data);
+           //certisfyCryptoUtil.ECDSA_SIGNER.verifyMessage(receiverIdAuth.publicKey,receiverIdAuth.auth_signature_string,receiverIdAuth.signature).
+
+           let verified = (skipReceiverIdVerification?true:(await certisfyCryptoUtil.ECDSA_SIGNER.verifyMessage(receiverIdAuth.publicKey,receiverIdAuth.auth_signature_string,receiverIdAuth.auth_signature)))
+
+           let dhKey = await certisfyCryptoUtil.bobKeyGen(dhExchange.alice_public_key);
+           let spUri = alice_data && alice_data.sp_uri?alice_data.sp_uri:null;
+
+           let dhxParams = [{"name":"pki-dhx-nonce","value":userCode+"-"+dhExchange.create_date}];
+           let claimSig = await fnClaimProvider(dhxParams);
+
+           let cipherText = await certisfyCryptoUtil.AES_GCM_CIPHER.encryptMessage(dhKey.AESKey,typeof claimSig == "object"?JSON.stringify(claimSig):claimSig);
+
+           let resp = await postDHExchange({
+               "user_code":userCode,
+               "bob_public_key":dhKey.publicKeyBase64,
+               "bob_data":cipherText
+           })
+
+           return Object.assign(resp,{claim:claimSig});
+    }
+
     async function getCert(finger_print){
       
       return new Promise((resolve,reject)=>{
@@ -445,19 +519,6 @@
           else
           {
               getCertChain(finger_print).then((chain)=>resolve(chain.certs.length>0?chain.certs[0]:null));
-              /*
-              $.ajax({url:API_PROXY_TARGET,
-                      data:{
-                        "action":"get-cert",
-                        "fingerprint":finger_print
-                      },
-                      method:"POST",
-                      dataType:"json"
-                }).
-                done(function(cert){
-                    resolve(cert);
-                });
-                */
           }
       });    
     }
@@ -497,7 +558,7 @@
       	return _trustChain;
     }
 
-    async function getCertChain(finger_print,chain_health_check,ignoreIssuerPrivacy=true){
+    async function getCertChain(finger_print,chain_health_check,ignoreIssuerPrivacy=true,ignoreLocalStore=false){
       	return new Promise((resolve,reject)=>{
             if(SDK_MODE)
                return resolve(chain_health_check?[]:{"certs":[]})
@@ -511,30 +572,6 @@
                       "fingerprint":finger_print
             };
           
-          	/*
-            $.ajax({url:API_PROXY_TARGET,
-                    data:params,
-                    method:"POST",
-                    dataType:"json"
-            }).done(function(resp){
-              
-                if(resp.status && resp.status != "failure"){
-                	resolve(resp.chain);
-                }
-                else
-                if(clientApp && clientApp.findCertificate(finger_print))
-                {
-                  	getCertChainFromLocalStore(finger_print,chain_health_check,ignoreIssuerPrivacy).then((chain)=>{
-                    	resolve(chain)
-                    })
-                    //exportCertificate(clientApp.findCertificate(finger_print).cert_text).then((cert)=>resolve({"certs":[Object.assign(cert,{"fromLocalStore":true})]}));
-                }
-                else
-                {
-                 	resolve({"certs":[]}); 
-                }
-            })
-            */
 			sendRequest(params).
             then(function(resp){
               
@@ -542,7 +579,7 @@
                 	resolve(resp.chain);
                 }
                 else
-                if(clientApp && clientApp.findCertificate(finger_print))
+                if(!ignoreLocalStore && clientApp && clientApp.findCertificate(finger_print))
                 {
                   	getCertChainFromLocalStore(finger_print,chain_health_check,ignoreIssuerPrivacy).then((chain)=>{
                     	resolve(chain)
@@ -569,7 +606,6 @@
         return (clientApp && clientApp.findCertificate(finger_print));
     }
 
-
 	async function getCertChainFromLocalStore(finger_print,chain_health_check,ignoreIssuerPrivacy){
           //attempt to resolve chain, always prioritize registry lookup over 
           //local store or attached trust chains
@@ -588,40 +624,16 @@
           return {"certs":certs};
     }
 
-    async function wrapCertIdentity(idCertSig,spUri,enclosedSig,includeTrustChain,vouchForClaimIdentities,isForPrivatePersona){
+    async function wrapCertIdentity(idCertSig,spUri,enclosedSig,includeTrustChain,vouchedForClaimIdentities,isForPrivatePersona){
       
         let privateSPUri = await sha2Hex(spUri);
       	return new Promise((resolve,reject)=>{
-            /*
-            $.ajax({url:API_PROXY_TARGET,
-                    data:{
-                    	"action":"post-cert-identity",
-                      	"id_anchor_cert_sig":idCertSig,
-                        "sp_uri":privateSPUri,
-                        "enclosed_sig":enclosedSig,
-                      	"vouch_for_claim_identities":(vouchForClaimIdentities && Array.isArray(vouchForClaimIdentities)?JSON.stringify(vouchForClaimIdentities):vouchForClaimIdentities),
-                      	"include_trust_chain":includeTrustChain,
-                      	"is_private_persona":isForPrivatePersona
-                    },
-                    method:"POST",
-                    dataType:"json"
-            }).
-            done(function(resp){
-                if(typeof resp.status == "undefined" || resp.status != "failure"){
-                	resolve(resp);
-                }
-                else
-                {                    
-                 	alert(resp.message);
-                }
-            })
-            */
 			sendRequest({
                     	"action":"post-cert-identity",
                       	"id_anchor_cert_sig":idCertSig,
                         "sp_uri":privateSPUri,
                         "enclosed_sig":enclosedSig,
-                      	"vouch_for_claim_identities":(vouchForClaimIdentities && Array.isArray(vouchForClaimIdentities)?JSON.stringify(vouchForClaimIdentities):vouchForClaimIdentities),
+                      	"vouch_for_claim_identities":(vouchedForClaimIdentities && Array.isArray(vouchedForClaimIdentities)?JSON.stringify(vouchedForClaimIdentities):vouchedForClaimIdentities),
                       	"include_trust_chain":includeTrustChain,
                       	"is_private_persona":isForPrivatePersona
             }).
@@ -642,18 +654,6 @@
             if(SDK_MODE)
                return resolve({})
           
-          	/*
-            $.ajax({url:API_PROXY_TARGET,
-                    data:{
-                      "action":"get-tracked-signature",
-                      "sig_id":sig_id
-                    },
-                    method:"POST",
-                    dataType:"json"
-            }).done(function(resp){
-                resolve(resp);
-            })*/
-          
 			sendRequest({
                       "action":"get-tracked-signature",
                       "sig_id":sig_id
@@ -666,19 +666,6 @@
     async function getEncryptedIssuerFingerPrint(signer_signature){
       	return new Promise((resolve,reject)=>{
           
-            /*
-            $.ajax({url:API_PROXY_TARGET,
-                    data:{
-                      "action":"encrypt-issuer-fingerprint",
-                      "signer_signature":(typeof signer_signature == "string"?signer_signature:JSON.stringify(signer_signature))
-                    },
-                    method:"POST",
-                    dataType:"json"
-            }).done(function(resp){
-                resolve(resp);
-            })
-            */
-          
 			sendRequest({
                       "action":"encrypt-issuer-fingerprint",
                       "signer_signature":(typeof signer_signature == "string"?signer_signature:JSON.stringify(signer_signature))
@@ -690,18 +677,6 @@
 
     async function updateCertTrustchainPrivacy(signer_signature){
       	return new Promise((resolve,reject)=>{
-            /*
-            $.ajax({url:API_PROXY_TARGET,
-                    data:{
-                      "action":"update-cert-trustchain-privacy",
-                      "signer_signature":(typeof signer_signature == "string"?signer_signature:JSON.stringify(signer_signature))
-                    },
-                    method:"POST",
-                    dataType:"json"
-            }).done(function(resp){
-                resolve(resp);
-            })
-            */
           
 			sendRequest({
                       "action":"update-cert-trustchain-privacy",
@@ -1679,10 +1654,10 @@
         	return null;
     }
 
-    async function attachIdentity(element,elementName,pkiSpUri,enclosedSig,idAnchorCertObj,includeTrustChain,vouchForClaimIdentities,isForPrivatePersona){
+    async function attachIdentity(element,elementName,pkiSpUri,enclosedSig,idAnchorCertObj,includeTrustChain,vouchedForClaimIdentities,isForPrivatePersona){
         let isVersioned = certPayloadHasField(idAnchorCertObj.cert_text,"pki-cert-version");
       
-        let idFields = await clientApp.selectCertFields([elementName+(isVersioned?"":"_HASH")],idAnchorCertObj,null);
+        let idFields = await selectCertFields([elementName+(isVersioned?"":"_HASH")],idAnchorCertObj,null);
       
         //hash id before sending it
         if(isVersioned){
@@ -1709,10 +1684,10 @@
         delete idCertSig["plainFields"];
       	delete idCertSig["hmacedPlainFields"];
       
-        return await wrapCertIdentity(JSON.stringify(idCertSig),pkiSpUri,enclosedSig,includeTrustChain,vouchForClaimIdentities,isForPrivatePersona);
+        return await wrapCertIdentity(JSON.stringify(idCertSig),pkiSpUri,enclosedSig,includeTrustChain,vouchedForClaimIdentities,isForPrivatePersona);
     }
 
-    async function buildSPIdentityAnchorSignature(idAnchorCertObj,pkiSpUri,signatureObject,signer,includeTrustChain,vouchForClaimIdentities,isForPrivatePersona){
+    async function buildSPIdentityAnchorSignature(idAnchorCertObj,pkiSpUri,signatureObject,signer,includeTrustChain,vouchedForClaimIdentities,isForPrivatePersona){
             if(pkiSpUri == null || pkiSpUri.length == 0)
                 return null;      
       		
@@ -1748,7 +1723,7 @@
                         return null;
               }
               */
-      		  return await attachIdentity(idAnchor.element,idAnchor.elementName,pkiSpUri,JSON.stringify(signatureObject)/*signatureObject.signature*/,idAnchorCertObj,includeTrustChain,vouchForClaimIdentities,isForPrivatePersona);
+      		  return await attachIdentity(idAnchor.element,idAnchor.elementName,pkiSpUri,JSON.stringify(signatureObject)/*signatureObject.signature*/,idAnchorCertObj,includeTrustChain,vouchedForClaimIdentities,isForPrivatePersona);
             }
       		return null;
     }
@@ -2190,6 +2165,40 @@
       	return maskedField;
     }
 
+    async function selectCertFields(fields,cert,_selectedFields){
+
+        return new Promise(async (resolve,reject)=>{
+            let selectedFields = _selectedFields?_selectedFields:[];
+            let plainFields = [];
+            let maskedFields = [];          
+
+            for(let i=0;i<fields.length;i++)
+                selectedFields.push(cert.csr.signedDocument.find(f=>f.plainField.name == fields[i]));
+
+            //attach verified fields
+            for(const field of selectedFields){    
+                let plainField = {};
+                plainField[field.plainField.name]=field.plainField.value;
+                plainFields.push(plainField);
+
+                if(field.maskedField)
+                {
+                    let maskedField = {};
+                    maskedField[field.maskedField.name]=field.maskedField.value;
+                    maskedField["hmacKey"] = field.hmacKey?field.hmacKey:field.maskedField.hmacKey;
+                    maskedFields.push(maskedField);
+                }
+                else
+                {
+                    let maskedField = await createPrivateField(field.plainField);
+                    maskedFields.push(maskedField);
+                }
+            }
+
+            resolve(Object.assign({},{"plainFields":plainFields,"maskedFields":maskedFields}));
+        });
+    }
+
 	function filterFields(fields,filter){
         let filteredFields = [];
         for(let i=0;i<filter.length;i++){
@@ -2356,7 +2365,17 @@
       	return stringToSign;
     }
 
-    async function signClaim(signer,stringToSign,plainFields,idAnchorCertObject,pkiSpUri,includeTrustChain,includeTrustChainInIDCertSig,vouchForClaimIdentities,isForPrivatePersona){
+	function isValidDHExchange(userCode,dhExchange,verification){
+        let dhxNonce = getVerificationField(verification,"pki-dhx-nonce");
+
+        if(dhxNonce){
+          dhxNonce = dhxNonce.plainField["pki-dhx-nonce"];
+          return (dhxNonce == (userCode+"-"+dhExchange.create_date));
+        }
+        return false;
+    }
+
+    async function signClaim(signer,stringToSign,plainFields,idAnchorCertObject,pkiSpUri,includeTrustChain,includeTrustChainInIDCertSig,vouchedForClaimIdentities,isForPrivatePersona){
         //console.log("signClaim:",signer,stringToSign,enclosedSigIdLink,idAnchorCertObject,pkiSpUri)
         
         let verified = false;
@@ -2404,7 +2423,7 @@
             
             includeTC = (typeof idAnchorCertObject.isInRegistry == "undefined" || idAnchorCertObject.isInRegistry != true || includeTrustChainInIDCertSig);
           
-            signaturePayload["pki-identity"]=await buildSPIdentityAnchorSignature(idAnchorCertObject,pkiSpUri,signaturePayload,signer,includeTC,vouchForClaimIdentities,isForPrivatePersona);
+            signaturePayload["pki-identity"]=await buildSPIdentityAnchorSignature(idAnchorCertObject,pkiSpUri,signaturePayload,signer,includeTC,vouchedForClaimIdentities,isForPrivatePersona);
           
             if(typeof signaturePayload["pki-identity"] == "undefined" || signaturePayload["pki-identity"] == null){
 				alert("Your identity certificate appears to have a problem, unable to generate identity for claim");
@@ -2548,6 +2567,25 @@
             let signatureVerification = {};
             signatureVerification["signatureVerified"]=false; 
             return signatureVerification;
+    }
+
+	async function verifyDHExchangeClaim(userCode,alicePrivateKey,useDHExchange,spUri=null,useChain=null){
+        let dhExchange =  useDHExchange;
+        if(!dhExchange){
+          const dhResp = await getDHExchange(userCode);
+          if(dhResp.status != "success")
+             return {error:dhResp};
+          
+          dhExchange =  dhResp.dhExchange;
+        }
+      
+        const dhKey 		= await certisfyCryptoUtil.bobsResponseKeyGen(dhExchange.bob_public_key,{"publicKey":dhExchange.alice_public_key,"privateKey":alicePrivateKey});
+        const claim 		= JSON.parse(await certisfyCryptoUtil.AES_GCM_CIPHER.decryptMessage(dhKey.AESKey,dhExchange.bob_data));
+
+      	const verification  = await verifyClaim(claim,spUri,useChain||claim.trustChain);
+        verification["failedDHExchangeNonceValidation"] = !isValidDHExchange(userCode,dhExchange,verification);
+
+      	return {verification,claim};
     }
 
     async function getVouches(plainFields,plainFieldsSummary){
@@ -2865,6 +2903,7 @@
 
         if(docVerificationContext.isEmbedSticker)
             return (docVerificationContext.certChainVerification.certificateVerified && 
+                    !docVerificationContext.failedDHExchangeNonceValidation &&
                     (!docVerificationContext.sigStatusVerification || docVerificationContext.sigStatusVerification == "good") &&
                     docVerificationContext.signatureExpirationStatus !='expired' &&
                     docVerificationContext.signatureExpirationStatus !='invalid' &&
@@ -2875,6 +2914,7 @@
                     !docVerificationContext.certChainVerification.chain.find(c=>c.finger_print == demoTrustAnchorFingerprint));
 
         return (docVerificationContext.certChainVerification.certificateVerified && 
+                !docVerificationContext.failedDHExchangeNonceValidation &&
                 (/*docVerificationContext.certificateIsTrustAnchor ||*//*this.isEmbedSession()*/docVerificationContext.stickerClaimValidation || 
                 (docVerificationContext.pkiIdentityVerified && 
                 docVerificationContext.pkiIdentityReceiverMatch)) &&
@@ -3114,7 +3154,11 @@
           messageList.push('The certificate that attests to this claim was either not issued by a valid Certisfy trust anchor partner (and/or their certificate is invalid) or is not valid (expired,pretermed or revoked).');
         }
 
-
+        if(docVerificationContext.failedDHExchangeNonceValidation)
+        {
+           messageList.push('The claim was transmited via a claim exchange but failed validation.');
+        }
+      
         if(docVerificationContext.signatureExpirationStatus=='unspecified')
         {
           messageList.push(`The claim doesn't specify an expiration time.`);
@@ -3444,7 +3488,7 @@
             let isVersioned = certPayloadHasField(idCert.cert_text,"pki-cert-version");
           
             let idElementInfo = await extractIdentityAnchorElement(idCert);
-            let idFields = await clientApp.selectCertFields([idElementInfo.elementName+(isVersioned?"":"_HASH")],idCert);
+            let idFields = await selectCertFields([idElementInfo.elementName+(isVersioned?"":"_HASH")],idCert);
       
         	//hash id before sending it
 			if(isVersioned){
@@ -3672,6 +3716,155 @@
       	else
           	return Object.assign({},{"plainFields":plainFields}); 
     }
+
+	async function createStandardClaimFields(signer,certContextSelectedFields,certContextUnverifiedFields,extraFields,claimValidFrom,claimExpiration){
+        let plainFields = [];
+        let maskedFields = [];
+  
+        //attach verified fields
+        if(certContextSelectedFields){
+            for(let field of certContextSelectedFields){
+
+                if(clientApp && clientApp.isStrictlyInternalClaimField && field.maskedField && clientApp.isStrictlyInternalClaimField(field.maskedField)) {
+                  	return {error:"Claim field "+field.maskedField.name+" can't be used, will be ignored."};
+                }
+
+                if(clientApp && clientApp.isStrictlyInternalClaimField && clientApp.isStrictlyInternalClaimField(field.plainField)) {
+                  	return {error:"Claim field "+field.plainField.name+" can't be used, will be ignored."};
+                }
+
+                let plainField = {};
+                plainField[field.plainField.name]=field.plainField.value;
+                plainFields.push(plainField);
+
+                if(field.maskedField)
+                {
+                    let maskedField = {};
+                    maskedField[field.maskedField.name]=field.maskedField.value;
+                    maskedField["hmacKey"] = field.hmacKey?field.hmacKey:field.maskedField.hmacKey;
+                    maskedFields.push(maskedField);
+                }
+                else
+                {
+                    let maskedField = await createPrivateField(field.plainField);
+                    maskedFields.push(maskedField);
+                }
+            }
+        }
+
+        //attach unverified fields
+        if(certContextUnverifiedFields){
+            for(const field of certContextUnverifiedFields){
+                if(clientApp && clientApp.isStrictlyInternalClaimField && clientApp.isStrictlyInternalClaimField(field)) {
+                  return {error:"Claim field "+field.name+" can't be used, will be ignored."};
+                }
+                let fieldVal = field.value;
+                let fieldClaimObject = textToClaimObject(field.value);
+
+                const normizeFieldNames = ["pki-vouch-for-claim"];
+                field.name =  normizeFieldNames.find(f=>field.name.startsWith(f))?normizeFieldNames.find(f=>field.name.startsWith(f)):field.name;
+
+                if(fieldClaimObject && fieldsContainVouchedForClaims(fieldClaimObject.plainFields))
+                  field.name =  "pki-claim-vouch";
+
+                let embeddedPlainFields;
+
+                //before embedding, remove plainFields to preserve privacy
+                if(fieldClaimObject){
+                  embeddedPlainFields = fieldClaimObject.plainFields;
+
+                  delete fieldClaimObject.plainFields;
+                  delete fieldClaimObject.hashedPlainFields;
+
+                  field.value = JSON.stringify(fieldClaimObject);
+                }
+
+                let plainField = {};
+                plainField[field.name]=field.value;
+                plainFields.push(plainField);
+
+                let maskedField = await createPrivateField(field);
+                maskedFields.push(maskedField);
+
+                //map claim text hash to plainFields for claim for future use
+                if(embeddedPlainFields){
+                    let auxField = {
+                      "name":("pki-plain-fields:"+(await sha2Hex(fieldClaimObject.signature))),
+                      "value":JSON.stringify(embeddedPlainFields)
+                    }
+                    plainField = {};
+                    plainField[auxField.name]=auxField.value;
+                    plainFields.push(plainField);
+
+                    maskedField = await createPrivateField(auxField);
+                    maskedFields.push(maskedField);
+                }
+
+                field.value = fieldVal;//restore if it was changed
+            }
+        }
+
+        if(extraFields){
+            for(const field of extraFields){                  
+                let plainField = {};
+                plainField[field.name]=field.value;
+                plainFields.push(plainField);
+
+                let maskedField = await createPrivateField(field);
+                maskedFields.push(maskedField);
+            }
+        }
+
+        if(plainFields.length == 0){
+          	return {error:"Please select one or more fields for the claim."};
+        }
+
+    	//attach validity start date
+        if(claimValidFrom){
+            plainFields.push({"pki-valid-from-time":claimValidFrom});
+            let maskedField = await createPrivateField({"name":"pki-valid-from-time","value":claimValidFrom})
+            maskedFields.push(maskedField);
+        }
+        else
+        {
+          	return {error:"Please provide a validity start date for this claim."}; 
+        }
+
+        //attach expiration date
+        if(claimExpiration){
+            plainFields.push({"pki-expiration-time":claimExpiration});
+            let maskedField = await createPrivateField({"name":"pki-expiration-time","value":claimExpiration})
+            maskedFields.push(maskedField);
+        }
+        else
+        {
+          	return {error:"Please provide an expiration date for this claim."}; 
+        }
+
+    	//attach metadata fields
+        for(const field of signer.csr.signedDocument){
+            let plainField = {};
+            if(["pki-id-link","pki-id-proofing-level"].includes(field.plainField.name))
+            {
+                plainField[field.plainField.name]=field.plainField.value;
+                plainFields.push(plainField);
+
+                if(field.maskedField)
+                {
+                    let maskedField = {};
+                    maskedField[field.maskedField.name]=field.maskedField.value;
+                    maskedField["hmacKey"] = field.hmacKey?field.hmacKey:field.maskedField.hmacKey;
+                    maskedFields.push(maskedField);
+                }
+                else
+                {                    
+                    let maskedField = await createPrivateField(field.plainField);
+                    maskedFields.push(maskedField);
+                }
+            }
+        }
+   		return {plainFields,maskedFields};
+	}
 
     async function extractAndAttachPlainFields(claim,plainFields){
         const claimObject = typeof claim == "string"?JSON.parse(claim):claim;
@@ -3943,6 +4136,10 @@
       			//sigPayload.trustChain = await getCertChainFromLocalStore(signer.finger_print);
                 sigPayload.trustChain = await getCertChain(signer.finger_print,false,false);
               
+                //prefer registry chain over local store
+              	if((!sigPayload.trustChain || !sigPayload.trustChain.certs || sigPayload.trustChain.certs.length == 0 || sigPayload.trustChain.certs[0].fromLocalStore) && signer.trustChain)
+                  	sigPayload.trustChain = signer.trustChain;
+              
                 /*
                 sigPayload.trustChain = await getCertChain(signer.finger_print);
                 if(sigPayload.trustChain.certs.length == 0){//if signer is not in registry, attach local cert
@@ -4011,10 +4208,12 @@
       verifyText,
       signClaim,
       verifyClaim,
+      verifyDHExchangeClaim,
       isClaimTrustworthy,
       buildErrorList,
       verifyVouches,
       getVouchedClaimIdentities,
+      isValidDHExchange,
       createPrivateField,
       filterFields,
       getMatchingMaskedFields,
@@ -4041,6 +4240,8 @@
       decodeCertificate,
       getCertChain,
       createClaimFields,
+      createStandardClaimFields,
+      selectCertFields,
       extractClaimPlainFields,
       unmaskFieldVerifications,
       maskClaimPlainFields,
@@ -4068,7 +4269,13 @@
       getVerificationResult,
       getVerifiedCertificateField,
       randomUUID,
+      postDHExchange,
+      getDHExchange,
+      initiateDHExchange,
+      executeDHExchange,
+      createClaimDateTime,
       PKI_CERT_VERSION,
       SET_SDK_MODE,
-      demoTrustAnchorFingerprint
+      demoTrustAnchorFingerprint,
+      idAnchorElements
     };
