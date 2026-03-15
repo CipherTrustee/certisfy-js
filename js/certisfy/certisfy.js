@@ -517,8 +517,8 @@
       return new Promise((resolve,reject)=>{
           if(clientApp && clientApp.findCertificate(finger_print)){
                getLocalCert(finger_print).then((cert)=>resolve(cert));
-                //return clientApp.findCertificate(finger_print);
-          }        
+               //return clientApp.findCertificate(finger_print);
+          }
           else
           {
               getCertChain(finger_print).then((chain)=>resolve(chain.certs.length>0?chain.certs[0]:null));
@@ -4136,12 +4136,22 @@
       
 			if(includeTC){
                 //This will recursively resolve the trust chain and attach the whole thing
-      			//sigPayload.trustChain = await getCertChainFromLocalStore(signer.finger_print);
-                sigPayload.trustChain = await getCertChain(signer.finger_print,false,false);
+                let trustChain = await getCertChain(signer.finger_print,false,false);
               
                 //prefer registry chain over local store
-              	if((!sigPayload.trustChain || !sigPayload.trustChain.certs || sigPayload.trustChain.certs.length == 0 || sigPayload.trustChain.certs[0].fromLocalStore) && signer.trustChain)
-                  	sigPayload.trustChain = signer.trustChain;
+              	if((!trustChain || !trustChain.certs || trustChain.certs.length == 0 || trustChain.certs[0].fromLocalStore) && (signer.trustChain && signer.trustChain.certs && signer.trustChain.certs.length>0))
+                  	trustChain = signer.trustChain;
+                
+              	if((!trustChain || !trustChain.certs || trustChain.certs.length == 0)){
+                    trustChain = await getCertChainFromLocalStore(signer.finger_print)
+                  
+                  	//last resort
+                  	if((!trustChain || !trustChain.certs || trustChain.certs.length == 0))
+                  		trustChain = {"certs":[await exportCertificate(signer.cert_text,Object.assign({"fromLocalStore":true}))]};
+                }
+              
+                if((trustChain && trustChain.certs && trustChain.certs.length > 0))
+                  	sigPayload["trustChain"] = trustChain;
               
                 /*
                 sigPayload.trustChain = await getCertChain(signer.finger_print);
