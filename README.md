@@ -20,10 +20,10 @@ The following API functions are common APIs used by both the Certisfy signer and
       `alice_public_key` is the base64 encoded public key. `alice_data` is optional, it might include the receiver
       id, see [verifier](https://github.com/CipherTrustee/certisfy-verifier) for example usage.
       
-      When executing/completing an exchange, ie playing role *Bob*, this object takes the form `{user_code,bob_public_key,bob_data,cipherText}`.
-      `bob_public_key` is the base64 encoded public key. `bob_data` is optional, see [signer](https://github.com/CipherTrustee/certisfy-signer) for example usage.
+      When executing/completing an exchange, ie playing role *Bob*, this object takes the form `{user_code,bob_public_key,bob_data}`.
+      `bob_public_key` is the base64 encoded public key. `bob_data` is the cipher text of the claim, see [signer](https://github.com/CipherTrustee/certisfy-signer) for example usage.
       
-      `cipherText` is the encrypted claim, base64 encoded. `user_code` is the lookup code for the exchange.
+      `user_code` is the lookup code for the exchange.
 
     **Usage** 
     
@@ -46,6 +46,6 @@ The following API functions are common APIs used by both the Certisfy signer and
     
     ```javascript
     const {status,message,dhExchange} = await certisfy.getDHExchange(userCode);
-    const {alice_public_key,alice_data,user_code,bob_public_key,bob_data,cipherText} = dhExchange;
+    const {alice_public_key,alice_data,user_code,bob_public_key,bob_data} = dhExchange;
     ```     
 

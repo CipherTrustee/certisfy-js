@@ -465,7 +465,7 @@
 
         const resp = await postDHExchange({
             "alice_public_key":dhKeyPair.publicKeyBase64,
-            "alice_data":alice_data?JSON.stringify(alice_data):null
+            "alice_data":alice_data?JSON.stringify(alice_data):undefined
         })
         
         if(resp.status == "success")
