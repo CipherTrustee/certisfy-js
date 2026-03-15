@@ -2576,10 +2576,10 @@
         let dhExchange =  useDHExchange;
         if(!dhExchange){
           const dhResp = await getDHExchange(userCode);
-          if(dhResp.status != "success")
+          if(dhResp.status && dhResp.status != "success")
              return {error:dhResp};
           
-          dhExchange =  dhResp.dhExchange;
+          dhExchange =  dhResp;
         }
       
         const dhKey 		= await certisfyCryptoUtil.bobsResponseKeyGen(dhExchange.bob_public_key,{"publicKey":dhExchange.alice_public_key,"privateKey":alicePrivateKey});
