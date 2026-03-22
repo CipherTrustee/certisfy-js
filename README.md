@@ -1,4 +1,4 @@
-This is the core implementation of Certisfy for Javascript.
+This is the core implementation SDK of Certisfy for Javascript.
 
 It consists of a [signer](https://github.com/CipherTrustee/certisfy-signer) and a [verifier](https://github.com/CipherTrustee/certisfy-verifier).
 

@@ -1,7 +1,5 @@
-    import * as asn1js from './crypto/asn1js.js';
-    import * as pkijs from './crypto/pkijs.es.js';
-    import * as hmacUtil from './crypto/hmac-util.js';
-    import * as pvtsutils from './crypto/pvtsutils.js';
+    import * as hmacUtil from './hmac-util.js';
+    import * as pvtsutils from '../pkijs/pvtsutils.js';
 
     let dhParams = null;
     
@@ -22,34 +20,109 @@
 
 	const   _CURVE_J2JS					= {"secp256r1":"P-256","secp384r1":"P-384","secp521r1":"P-521"};
 
-    function CURVE_J2JS(c){
-       return _CURVE_J2JS[c]? _CURVE_J2JS[c]:c;
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	function randomUUID(preferredCrypto){
+    	if(preferredCrypto && preferredCrypto.randomUUID)
+          return preferredCrypto.randomUUID().replaceAll("-","");
+      
+      	return crypto.randomUUID().replaceAll("-","");
     }
 
-	function setDHParams(params){
-      dhParams = params;
+    async function shaHex(message,algo) {
+      const msgUint8 = typeof message == "string"?new TextEncoder().encode(message):message; // encode as (utf-8) Uint8Array
+      const hashBuffer = await crypto.subtle.digest(algo, msgUint8); // hash the message
+      const hashArray = Array.from(new Uint8Array(hashBuffer)); // convert buffer to byte array
+      const hashHex = hashArray
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""); // convert bytes to hex string
+      return hashHex;
     }
 
-	function getDHParams(){
-     	return dhParams; 
-    }
-		
-    function randomUUID(){      
-        return window.crypto.randomUUID().replaceAll("-","");
+    async function sha1Hex(message) {
+       return await shaHex(message,"SHA-1");
     }
 
-    function randomHex(len){
-        return [...window.crypto.getRandomValues(new Uint8Array(len?parseInt(len):32))].map(m=>('0'+m.toString(16)).slice(-2)).join('');
+    async function sha2Hex(message) {
+       return await shaHex(message,"SHA-256");
     }
 
-	function hasCurvePrefix(key){
-     	return Object.keys(_CURVE_J2JS).find(c=>( (key.startsWith(c+"+") ||  (key.startsWith(CURVE_J2JS(c)+"+")) )));
+	async function sha2HexList(vals){
+		let hashes = [];
+        for(let i=0;i<vals.length;i++)
+           hashes.push({"text":vals[i],"hash":await sha2Hex(vals[i])});
+      
+        return hashes;
     }
 
-    function getMessageEncoding(message) {          
-      let enc = new TextEncoder();
-      return enc.encode(message);
+	async function sha1HexList(vals){
+		let hashes = [];
+        for(let i=0;i<vals.length;i++)
+           hashes.push({"text":vals[i],"hash":await sha1Hex(vals[i])});
+      
+        return hashes;
     }
+
+	function hmacHex(hmacKey,val){
+     	return hmacUtil.hex(hmacUtil.sign(hmacKey,val)) 
+    }
+
+    async function sha1HmacHex(hmacKey,message) {
+       return hmacHex(hmacKey,await sha1Hex(message));
+    }
+
+    async function sha2HmacHex(hmacKey,message) {
+       return hmacHex(hmacKey,await sha2Hex(message));
+    }
+
+    /* eslint-disable deprecation/deprecation */
+    function toPEM(buffer, tag) {
+        if(typeof buffer =="string" && buffer.startsWith(`-----BEGIN ${tag}-----`))
+          	return buffer;
+      
+        return [
+            `-----BEGIN ${tag}-----`,
+            typeof buffer =="string"?formatPEM(buffer):formatPEM(pvtsutils.Convert.ToBase64(buffer)),
+            `-----END ${tag}-----`,
+            "",
+        ].join("\n");
+    }
+
+    function fromPEM(pem) {
+        const base64 = pem
+            .replace(/-{5}(BEGIN|END) .*-{5}/gm, "")
+            .replace(/\s/gm, "");
+        return pvtsutils.Convert.FromBase64(base64);
+    }
+
+    // Function to convert a base64-encoded string to an ArrayBuffer
+    function base64ToArrayBuffer(base64) {
+      /*const binaryString = atob(base64);
+      const arrayBuffer = new ArrayBuffer(binaryString.length);
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      for (let i = 0; i < binaryString.length; i++) {
+        uint8Array[i] = binaryString.charCodeAt(i);
+      }
+
+      return arrayBuffer;*/
+      return fromPEM(base64);
+    }   
+
+    function base64EncodeBin(bin){
+      return btoa(String.fromCharCode.apply(null, new Uint8Array(bin))); 
+    }
+
+    function base64DecodeToBin(b64){
+        const binaryString = atob(b64);
+        const length = binaryString.length;
+        const bytes = new Uint8Array(length);
+        for (let i = 0; i < length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
+    };
     /**
      * Format string in order to have each line with length equal to 64
      * @param pemString String to format
@@ -86,8 +159,76 @@
         return res;
     }
 
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+    function CURVE_J2JS(c){
+       return _CURVE_J2JS[c]? _CURVE_J2JS[c]:c;
+    }
+
+	function setDHParams(params){
+      dhParams = params;
+    }
+
+	function getDHParams(){
+     	return dhParams; 
+    }
+		
+    function xrandomUUID(){      
+        return crypto.randomUUID().replaceAll("-","");
+    }
+
+    function randomHex(len){
+        return [...crypto.getRandomValues(new Uint8Array(len?parseInt(len):32))].map(m=>('0'+m.toString(16)).slice(-2)).join('');
+    }
+
+	function hasCurvePrefix(key){
+     	return Object.keys(_CURVE_J2JS).find(c=>( (key.startsWith(c+"+") ||  (key.startsWith(CURVE_J2JS(c)+"+")) )));
+    }
+
+    function getMessageEncoding(message) {          
+      let enc = new TextEncoder();
+      return enc.encode(message);
+    }
+    /**
+     * Format string in order to have each line with length equal to 64
+     * @param pemString String to format
+     * @returns Formatted string
+     */
+    function xformatPEM(pemString) {
+        const PEM_STRING_LENGTH = pemString.length, LINE_LENGTH = 64;
+        const wrapNeeded = PEM_STRING_LENGTH > LINE_LENGTH;
+        if (wrapNeeded) {
+            let formattedString = "", wrapIndex = 0;
+            for (let i = LINE_LENGTH; i < PEM_STRING_LENGTH; i += LINE_LENGTH) {
+                formattedString += pemString.substring(wrapIndex, i) + "\r\n";
+                wrapIndex = i;
+            }
+            formattedString += pemString.substring(wrapIndex, PEM_STRING_LENGTH);
+            return formattedString;
+        }
+        else {
+            return pemString;
+        }
+    }  
+
+    function xdecodePEM(pem, tag = "[A-Z0-9 ]+") {
+        const pattern = new RegExp(`-{5}BEGIN ${tag}-{5}([a-zA-Z0-9=+\\/\\n\\r]+)-{5}END ${tag}-{5}`, "g");
+        const res = [];
+        let matches = null;
+        // eslint-disable-next-line no-cond-assign
+        while (matches = pattern.exec(pem)) {
+            const base64 = matches[1]
+                .replace(/\r/g, "")
+                .replace(/\n/g, "");
+            res.push(pvtsutils.Convert.FromBase64(base64));
+        }
+        return res;
+    }
+
     /* eslint-disable deprecation/deprecation */
-    function toPEM(buffer, tag) {
+    function xtoPEM(buffer, tag) {
         if(typeof buffer =="string" && buffer.startsWith(`-----BEGIN ${tag}-----`))
           	return buffer;
       
@@ -99,7 +240,7 @@
         ].join("\n");
     }
 
-    function fromPEM(pem) {
+    function xfromPEM(pem) {
         const base64 = pem
             .replace(/-{5}(BEGIN|END) .*-{5}/gm, "")
             .replace(/\s/gm, "");
@@ -115,12 +256,12 @@
         exportedPublicKeyAsString += String.fromCharCode(uint8Array[i]);
       }
       
-      const exportedPublicKeyAsBase64 = window.btoa(exportedPublicKeyAsString);
+      const exportedPublicKeyAsBase64 = btoa(exportedPublicKeyAsString);
       return exportedPublicKeyAsBase64;
     }    
         
     // Function to convert a base64-encoded string to an ArrayBuffer
-    function base64ToArrayBuffer(base64) {
+    function xbase64ToArrayBuffer(base64) {
       /*const binaryString = atob(base64);
       const arrayBuffer = new ArrayBuffer(binaryString.length);
       const uint8Array = new Uint8Array(arrayBuffer);
@@ -133,7 +274,7 @@
       return fromPEM(base64);
     }   
     
-    async function shaHex(message,algo) {
+    async function xshaHex(message,algo) {
       const msgUint8 = typeof message == "string"?new TextEncoder().encode(message):message; // encode as (utf-8) Uint8Array
       const hashBuffer = await crypto.subtle.digest(algo, msgUint8); // hash the message
       const hashArray = Array.from(new Uint8Array(hashBuffer)); // convert buffer to byte array
@@ -143,15 +284,15 @@
       return hashHex;
     }
 
-    async function sha1Hex(message) {
+    async function xsha1Hex(message) {
       return await shaHex(message,"SHA-1");
     }
 
-    async function sha2Hex(message) {
+    async function xsha2Hex(message) {
       return await shaHex(message,"SHA-256");
     }
 
-    async function hmacHex(text,hmacKey){
+    async function xhmacHex(text,hmacKey){
        return hmacUtil.hex(hmacUtil.sign(hmacKey,text));
     }
 
@@ -161,7 +302,7 @@
       - their ECDH public key
     */
     function deriveSecretKey(type,privateKey, publicKey) {
-      return window.crypto.subtle.deriveKey(
+      return crypto.subtle.deriveKey(
         {
           name: type/*"ECDH"*/,
           public: publicKey,
@@ -183,7 +324,7 @@
     */
     async function deriveSharedSecret(name,privateKey, publicKey,curve) {
                 
-        const secret = await window.crypto.subtle.deriveBits(
+        const secret = await crypto.subtle.deriveBits(
           (curve?{
             name: name, 
             namedCurve:CURVE_J2JS(curve),
@@ -196,7 +337,7 @@
           AES_KEY_SIZE*2
         );
 
-        /*return window.crypto.subtle.importKey(
+        /*return crypto.subtle.importKey(
           "raw",
           secret,
           { name: "HKDF" },
@@ -217,7 +358,7 @@
       // Generate 2 key pairs: one for Alice and one for Bob
       // In more normal usage, they would generate their key pairs
       // separately and exchange public keys securely
-      let alicesKeyPair = await window.crypto.subtle.generateKey(
+      let alicesKeyPair = await crypto.subtle.generateKey(
         (curve?{
           name:"ECDH",
           namedCurve: CURVE_J2JS(curve),//"P-384"
@@ -263,7 +404,7 @@
            if(hasCurvePrefix(_alicesPublicKey))
                   _alicesPublicKey = _alicesPublicKey.substring(_alicesPublicKey.indexOf("+")+1);
         //console.log("bobKeyGen1")
-          _alicesPublicKey = await window.crypto.subtle.importKey(
+          _alicesPublicKey = await crypto.subtle.importKey(
               "spki", // Key format (could be "raw", "spki", or "pkcs8" based on the key type)
               base64ToArrayBuffer(_alicesPublicKey),
               (_curve?{
@@ -275,7 +416,7 @@
             );
        }      
       //console.log("bobKeyGen2")
-      let bobsKeyPair = await window.crypto.subtle.generateKey(
+      let bobsKeyPair = await crypto.subtle.generateKey(
         (_curve?{
           name:"ECDH",
           namedCurve: CURVE_J2JS(_curve),//"P-384"
@@ -340,7 +481,7 @@
                   if(hasCurvePrefix(_bobsPublicKey))
                     	_bobsPublicKey = _bobsPublicKey.substring(_bobsPublicKey.indexOf("+")+1);                   
                 
-                  _bobsPublicKey = await window.crypto.subtle.importKey(
+                  _bobsPublicKey = await crypto.subtle.importKey(
                       "spki", 
                       base64ToArrayBuffer(_bobsPublicKey),
                       (_curve?{
@@ -358,7 +499,7 @@
                   if(hasCurvePrefix(_alicesPublicKey))
                     	_alicesPublicKey = _alicesPublicKey.substring(_alicesPublicKey.indexOf("+")+1);                
                                   
-                  _alicesPublicKey = await window.crypto.subtle.importKey(
+                  _alicesPublicKey = await crypto.subtle.importKey(
                       "spki", 
                       base64ToArrayBuffer(_alicesPublicKey),
                       (_curve?{
@@ -372,7 +513,7 @@
               }      
       
               if(typeof _alicesPrivateKey == "string"){                
-                  _alicesPrivateKey = await window.crypto.subtle.importKey(
+                  _alicesPrivateKey = await crypto.subtle.importKey(
                       "pkcs8", 
                       base64ToArrayBuffer(_alicesPrivateKey),
                       (_curve?{
@@ -420,9 +561,9 @@
     derive an AES key using HKDF.
     */
     function HKDF(keyMaterial, salt,algo) {
-      let _salt = salt?salt: window.crypto.getRandomValues(new Uint8Array(HMAC_LENGTH));
+      let _salt = salt?salt: crypto.getRandomValues(new Uint8Array(HMAC_LENGTH));
       
-      return window.crypto.subtle.deriveKey(
+      return crypto.subtle.deriveKey(
         {
           name: "HKDF",
           salt: _salt,
@@ -440,14 +581,14 @@
 
     async function encrypt(secret, plainText,algo,kdfType) {
         let _algo 		= algo?algo:"AES-GCM";
-        let salt 		= window.crypto.getRandomValues(new Uint8Array(16));
+        let salt 		= crypto.getRandomValues(new Uint8Array(16));
       
         let key = secret;
       
         if(kdfType && kdfType == "HKDF"){
           
             if(typeof secret == "string"){
-               key = await window.crypto.subtle.importKey(
+               key = await crypto.subtle.importKey(
                   "raw",
                   base64ToArrayBuffer(secret),
                   { name: "HKDF" },
@@ -459,7 +600,7 @@
       	else
         if(/*kdfType && kdfType == "SHA2_128_KDF"*/  _algo != "RSA-OAEP"){
               if(typeof secret == "string"){
-                key = await window.crypto.subtle.importKey(
+                key = await crypto.subtle.importKey(
                   "raw",
                   base64ToArrayBuffer(key),
                   { 
@@ -490,16 +631,13 @@
 
     async function decrypt(secret,ciphertext,algo,kdfType) {
         let _algo 		= algo?algo:"AES-GCM";
-        let ctBuffer 	= base64ToArrayBuffer(ciphertext);
-        let salt	 	= new Uint8Array(ctBuffer.slice(0,16));
-      
-             
+        let ctBuffer 	= base64ToArrayBuffer(ciphertext);             
         let key = secret;
       
         if(kdfType && kdfType == "HKDF"){
-          
+            let salt	 	= new Uint8Array(ctBuffer.slice(0,16));
             if(typeof secret == "string"){
-               key = await window.crypto.subtle.importKey(
+               key = await crypto.subtle.importKey(
                   "raw",
                   base64ToArrayBuffer(secret),
                   { name: "HKDF" },
@@ -511,7 +649,7 @@
       	else
         if(/*kdfType && kdfType == "SHA2_128_KDF" &&*/ _algo != "RSA-OAEP"){
               if(typeof secret == "string"){
-                key = await window.crypto.subtle.importKey(
+                key = await crypto.subtle.importKey(
                   "raw",
                   base64ToArrayBuffer(key),
                   { 
@@ -523,18 +661,20 @@
             }
         }
       
+        ctBuffer = (kdfType && kdfType == "HKDF")?new Uint8Array(ctBuffer.slice(16)):ctBuffer
+      
       	let plaintext;
         if(_algo == "AES-GCM")
-          	plaintext = await AES_GCM_CIPHER.decryptMessage(key,new Uint8Array(ctBuffer.slice(16)));
+          	plaintext = await AES_GCM_CIPHER.decryptMessage(key,ctBuffer);
       	else
 		if(_algo == "AES-CBC")
-          	plaintext = await AES_CBC_CIPHER.decryptMessage(key,new Uint8Array(ctBuffer.slice(16)));
+          	plaintext = await AES_CBC_CIPHER.decryptMessage(key,ctBuffer);
       	else
 		if(_algo == "AES-CTR")
-          	plaintext = await AES_CTR_CIPHER.decryptMessage(key,new Uint8Array(ctBuffer.slice(16)));
+          	plaintext = await AES_CTR_CIPHER.decryptMessage(key,ctBuffer);
 		else
         if(_algo == "RSA-OAEP")
-            plaintext = await RSA_OAEP_CIPHER.decryptMessage(key,new Uint8Array(ctBuffer.slice(16)));
+            plaintext = await RSA_OAEP_CIPHER.decryptMessage(key,ctBuffer);
       
         return  plaintext;
     }
@@ -550,7 +690,7 @@
           
 		  let _key  = key;
           if(typeof _key == "string"){            
-              _key = await window.crypto.subtle.importKey(
+              _key = await crypto.subtle.importKey(
                 "spki",
                 base64ToArrayBuffer(_key),
                 { 
@@ -562,7 +702,7 @@
               );
           }
           
-          let ciphertext = await window.crypto.subtle.encrypt(
+          let ciphertext = await crypto.subtle.encrypt(
             {
               name: "RSA-OAEP"
             },
@@ -581,7 +721,7 @@
           
 		  let _key  = key;
           if(typeof _key == "string"){            
-              _key = await window.crypto.subtle.importKey(
+              _key = await crypto.subtle.importKey(
                 "pkcs8",
                 base64ToArrayBuffer(_key),
                 { 
@@ -593,7 +733,7 @@
               );
           }     
           
-          let decrypted = await window.crypto.subtle.decrypt(
+          let decrypted = await crypto.subtle.decrypt(
             {
               name: "RSA-OAEP"
             },
@@ -610,7 +750,7 @@
         on the "Encrypt" and "Decrypt" buttons.
         */
  		generateKeyPair: async function(){
-              let keyPair = await window.crypto.subtle.generateKey(
+              let keyPair = await crypto.subtle.generateKey(
                 {
                 name: "RSA-OAEP",
                 // Consider using a 4096-bit key for systems that require long-term security
@@ -644,11 +784,11 @@
         encryptMessage:async function (key,message) {
           let encoded = getMessageEncoding(message);
           // The counter block value must never be reused with a given key.
-          let counter = window.crypto.getRandomValues(new Uint8Array(16));
+          let counter = crypto.getRandomValues(new Uint8Array(16));
           
           let _key  = key;
           if(typeof _key == "string"){            
-              _key = await window.crypto.subtle.importKey(
+              _key = await crypto.subtle.importKey(
                 "raw",
                 base64ToArrayBuffer(_key),
                 { 
@@ -659,7 +799,7 @@
               );
           }
           
-          let ciphertext = await window.crypto.subtle.encrypt(
+          let ciphertext = await crypto.subtle.encrypt(
             {
               name: "AES-CTR",
               counter:counter,
@@ -682,7 +822,7 @@
           
           let _key  = key;
           if(typeof _key == "string"){            
-              _key = await window.crypto.subtle.importKey(
+              _key = await crypto.subtle.importKey(
                 "raw",
                 base64ToArrayBuffer(_key),
                 { 
@@ -693,7 +833,7 @@
               );
           }
           
-          let decrypted = await window.crypto.subtle.decrypt(
+          let decrypted = await crypto.subtle.decrypt(
             {
               name: "AES-CTR",
               counter:new Uint8Array(ctBuffer.slice(0, 16)),
@@ -712,7 +852,7 @@
         on the "Encrypt" and "Decrypt" buttons.
         */
 		generateKey: async function(){
-            let key = await window.crypto.subtle.generateKey(
+            let key = await crypto.subtle.generateKey(
               {
                   name: "AES-CTR",
                   length: AES_KEY_SIZE
@@ -733,11 +873,11 @@
         encryptMessage:async function (key,message) {
           let encoded = getMessageEncoding(message);
           // The iv must never be reused with a given key.
-          let iv = window.crypto.getRandomValues(new Uint8Array(16));
+          let iv = crypto.getRandomValues(new Uint8Array(16));
           
           let _key  = key;
           if(typeof _key == "string"){            
-              _key = await window.crypto.subtle.importKey(
+              _key = await crypto.subtle.importKey(
                 "raw",
                 base64ToArrayBuffer(_key),
                 { 
@@ -748,7 +888,7 @@
               );
           }
           
-          let ciphertext = await window.crypto.subtle.encrypt(
+          let ciphertext = await crypto.subtle.encrypt(
             {
               name: "AES-CBC",
               iv
@@ -770,7 +910,7 @@
           
           let _key  = key;
           if(typeof _key == "string"){            
-              _key = await window.crypto.subtle.importKey(
+              _key = await crypto.subtle.importKey(
                 "raw",
                 base64ToArrayBuffer(_key),
                 { 
@@ -781,7 +921,7 @@
               );
           }
           
-          let decrypted = await window.crypto.subtle.decrypt(
+          let decrypted = await crypto.subtle.decrypt(
             {
               name: "AES-CBC",
               iv:new Uint8Array(ctBuffer.slice(0, 16))
@@ -797,7 +937,7 @@
         on the "Encrypt" and "Decrypt" buttons.
         */
 		generateKey: async function(){
-            let key = await window.crypto.subtle.generateKey(
+            let key = await crypto.subtle.generateKey(
               {
                   name: "AES-CBC",
                   length: AES_KEY_SIZE
@@ -819,11 +959,11 @@
         encryptMessage:async function (key,message) {
           let encoded = getMessageEncoding(message);
           // The iv must never be reused with a given key.
-          let iv = window.crypto.getRandomValues(new Uint8Array(GCM_NONCE_LENGTH));
+          let iv = crypto.getRandomValues(new Uint8Array(GCM_NONCE_LENGTH));
           
           let _key  = key;
           if(typeof _key == "string"){            
-              _key = await window.crypto.subtle.importKey(
+              _key = await crypto.subtle.importKey(
                 "raw",
                 base64ToArrayBuffer(_key),
                 { 
@@ -834,7 +974,7 @@
               );
           }
           
-          let ciphertext = await window.crypto.subtle.encrypt(
+          let ciphertext = await crypto.subtle.encrypt(
             {
               name: "AES-GCM",
               iv: iv
@@ -855,7 +995,7 @@
           
           let _key  = key;
           if(typeof _key == "string"){            
-              _key = await window.crypto.subtle.importKey(
+              _key = await crypto.subtle.importKey(
                 "raw",
                 base64ToArrayBuffer(_key),
                 { 
@@ -866,7 +1006,7 @@
               );
           }
           
-          let decrypted = await window.crypto.subtle.decrypt(
+          let decrypted = await crypto.subtle.decrypt(
             {
               name: "AES-GCM",
               iv: new Uint8Array(ctBuffer.slice(0, GCM_NONCE_LENGTH))
@@ -884,7 +1024,7 @@
         on the "Encrypt" and "Decrypt" buttons.
         */
 		generateKey: async function(){
-            let key = await window.crypto.subtle.generateKey(
+            let key = await crypto.subtle.generateKey(
               {
                   name: "AES-GCM",
                   length: AES_KEY_SIZE,
@@ -909,7 +1049,7 @@
                _key = _key.substring(_key.indexOf("+")+1);
             }
             
-            _key = await window.crypto.subtle.importKey(
+            _key = await crypto.subtle.importKey(
                 "pkcs8", 
                 base64ToArrayBuffer(_key),
                 (curvePrefix?{
@@ -920,7 +1060,7 @@
                 ["sign"]);
           }
           
-          let signature = await window.crypto.subtle.sign(
+          let signature = await crypto.subtle.sign(
             {
               name: curvePrefix?"ECDSA":"DSA",
               hash: { name: "SHA-256" },
@@ -941,7 +1081,7 @@
                    _key = _key.substring(_key.indexOf("+")+1);
                 }
                 
-                _key = await window.crypto.subtle.importKey(
+                _key = await crypto.subtle.importKey(
                     "spki", // Key format (could be "raw", "spki", or "pkcs8" based on the key type)
                     base64ToArrayBuffer(_key),
                     (curvePrefix?{
@@ -952,7 +1092,7 @@
                     ["verify"]);
               }
           
-              let result = await window.crypto.subtle.verify(
+              let result = await crypto.subtle.verify(
                 {
                   name: curvePrefix?"ECDSA":"DSA",
                   hash: { name: "SHA-256" },
@@ -965,7 +1105,7 @@
         generateKeyPair:async function (algo,curve="secp384r1"/*appears web crypto doesn't support P-256 for this??*/){
               let _curve = curve && curve.length>0?curve:"P-384";
           
-              let keyPair = await window.crypto.subtle.generateKey(
+              let keyPair = await crypto.subtle.generateKey(
               (_curve?{
                   name:"ECDSA",
                   namedCurve: CURVE_J2JS(_curve),
@@ -991,7 +1131,7 @@
     
     /*const DSA_SIGNER = {
         signMessage:async function (key,message){
-          let signature = await window.crypto.subtle.sign(
+          let signature = await crypto.subtle.sign(
             {
               name: "DSA",
               hash: { name: "SHA-384" },
@@ -1004,7 +1144,7 @@
         verifyMessage:async function(key,signature){
             
               let encoded = getMessageEncoding(signature);
-              let result = await window.crypto.subtle.verify(
+              let result = await crypto.subtle.verify(
                 {
                   name: "DSA",
                   hash: { name: "SHA-384" },
@@ -1021,7 +1161,7 @@
                     
           let _key  = key;
           if(typeof _key == "string"){            
-              _key = await window.crypto.subtle.importKey(
+              _key = await crypto.subtle.importKey(
                 "pkcs8",
                 base64ToArrayBuffer(_key),
                 (pss?{
@@ -1037,7 +1177,7 @@
               );
           }
           
-          let signature = await window.crypto.subtle.sign(
+          let signature = await crypto.subtle.sign(
             (pss?{
               name:"RSA-PSS",
               hash: { name: "SHA-256" },
@@ -1056,7 +1196,7 @@
           
               let _key  = key;
               if(typeof _key == "string"){
-                  _key = await window.crypto.subtle.importKey(
+                  _key = await crypto.subtle.importKey(
                       "spki",
                       base64ToArrayBuffer(_key),
                       (pss?{
@@ -1072,7 +1212,7 @@
                   );
               }
           
-              let result = await window.crypto.subtle.verify(
+              let result = await crypto.subtle.verify(
                 (pss?{
                   name:"RSA-PSS",
                   hash: { name: "SHA-256" },
@@ -1087,7 +1227,7 @@
           	  return result;
         },
         generateKeyPair:async function (pss){
-              let keyPair = await window.crypto.subtle.generateKey(
+              let keyPair = await crypto.subtle.generateKey(
               {
                 name: (pss?"RSA-PSS":"RSASSA-PKCS1-v1_5"),
                 modulusLength: 2048,
@@ -1111,8 +1251,10 @@
               kp.privateKeySig = await sha2Hex(kp.privateKey);
               return kp;
         }
-    }
-
+    }    
+    
+    
+    
 	export {
       	bobKeyGen,
       	aliceKeyGen,
@@ -1128,8 +1270,19 @@
         RSA_SIGNER,
       	encrypt,
         decrypt,
+        sha1Hex,
+        sha2Hex,
+        sha2HexList,
+        sha1HexList,
         shaHex,
         hmacHex,
         randomUUID,
-        randomHex
+        randomHex,
+      	toBase64,
+        toPEM,
+        fromPEM,
+        decodePEM,
+        base64ToArrayBuffer,
+        base64EncodeBin,
+        base64DecodeToBin
 	}
