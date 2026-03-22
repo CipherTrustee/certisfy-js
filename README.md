@@ -28,7 +28,7 @@ The following API functions are common APIs used by both the Certisfy signer and
     **Usage** 
     
     ```javascript
-    const {status,message,userCode} = await certisfy.postDHExchange(dhExchange);
+    const {status,message,userCode} = await certisfySDK.api.postDHExchange(dhExchange);
     ```    
     `userCode` is returned in response to a newly initiated exchange.
     
@@ -45,6 +45,6 @@ The following API functions are common APIs used by both the Certisfy signer and
     **Usage** 
     
     ```javascript
-    const {status,message,alice_public_key,alice_data,user_code,bob_public_key,bob_data} = await certisfy.getDHExchange(userCode);
+    const {status,message,alice_public_key,alice_data,user_code,bob_public_key,bob_data} = await certisfySDK.api.getDHExchange(userCode);
     ```     
 
