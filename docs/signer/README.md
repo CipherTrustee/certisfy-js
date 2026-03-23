@@ -4,7 +4,7 @@ This API is for the signer component of the Certisfy SDK.
 
 This API is used to implement this [signer](https://github.com/CipherTrustee/certisfy-signer) for developer use.
 
-You can see all functions exposed by the signer component API [here](https://github.com/CipherTrustee/certisfy-js/blob/6d7c0808d595d9396e458003c1f164549e80d214/src/core-pki/signer.js).
+You can see all functions exposed by the signer component API [here](https://github.com/CipherTrustee/certisfy-js/blob/master/src/core-pki/signer.js).
 
 The signer exposes the following API functions to facilitate claim creation.
 

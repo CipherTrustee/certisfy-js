@@ -4,7 +4,7 @@ This API is for the verifier component of the Certisfy SDK.
 
 This API is used to implement this [verifier](https://github.com/CipherTrustee/certisfy-verifier) for developer use.
 
-You can see all functions exposed by the verifier component API [here](https://github.com/CipherTrustee/certisfy-js/blob/6d7c0808d595d9396e458003c1f164549e80d214/src/core-pki/verifier.js).
+You can see all functions exposed by the verifier component API [here](https://github.com/CipherTrustee/certisfy-js/blob/master/src/core-pki/verifier.js).
 
 The verifier exposes the following API functions to facilitate claim verification.
 
@@ -125,7 +125,7 @@ The verifier exposes the following API functions to facilitate claim verificatio
     - `verification`\
       This is the verification object returned from the call to `verifyClaim`. 
       This contains details from the verification process. 
-      You can look at the console app UI code [index.html](https://github.com/CipherTrustee/certisfy-verifier/blob/a304d28bb8966741ee5d5d42a266796f7dbe835e/index.html) to see how it maps to verification UI result.
+      You can look at the console app UI code [index.html](https://github.com/CipherTrustee/certisfy-verifier/blob/master/index.html) to see how it maps to verification UI result.
 
     **Usage** 
     
@@ -161,7 +161,7 @@ The verifier exposes the following API functions to facilitate claim verificatio
     
     Below is an example showing the structure of the resulting object.
     
-    [verificationResult.json](https://github.com/CipherTrustee/certisfy-verifier/blob/a304d28bb8966741ee5d5d42a266796f7dbe835e/verificationResult.json)
+    [verificationResult.json](https://github.com/CipherTrustee/certisfy-verifier/blob/master/verificationResult.json)
     
 6. `isClaimTrustworthy(verification)`
 

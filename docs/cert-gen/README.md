@@ -4,7 +4,7 @@ This API facilitates automated provisioning of certificates by trust anchors. Fo
 are a government agency (ex DMV) that wants to issue certificates for trusted information to the public,
 you can use this API to implement such services.
 
-You can see all functions exposed by the cert-gen component API [here](https://github.com/CipherTrustee/certisfy-js/blob/6d7c0808d595d9396e458003c1f164549e80d214/src/core-pki/cert-gen.js).
+You can see all functions exposed by the cert-gen component API [here](https://github.com/CipherTrustee/certisfy-js/blob/master/src/core-pki/cert-gen.js).
 
 Below is documentation of various functions exposed by the cert-gen component API.
     

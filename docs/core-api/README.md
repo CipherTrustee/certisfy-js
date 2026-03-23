@@ -8,7 +8,7 @@ the component APIs and don't require the PKI platform API.
 The PKI platform API, which is a remote end-point API, offers what can be thought of as value-add capabilities 
 that most implementations will find valuable.
 
-You can see all functions exposed by the PKI platform API [here](https://github.com/CipherTrustee/certisfy-js/blob/6d7c0808d595d9396e458003c1f164549e80d214/src/core-api/api.js).
+You can see all functions exposed by the PKI platform API [here](https://github.com/CipherTrustee/certisfy-js/blob/master/src/core-api/api.js).
 
 Below is documentation of various functions exposed by the PKI platform API.
     
