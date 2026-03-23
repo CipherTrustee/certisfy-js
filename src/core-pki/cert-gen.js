@@ -409,7 +409,7 @@
           return JSON.parse(await AES_GCM_CIPHER.decryptMessage(encryptionKey,csrCipherText));
     }
 
-    async function createCert(csrPEM,startDateText,expireDateText,privateKey,delegateSigningAuthority,lateralLimit,issuer,certisfy_stripe_token,approvedCSRFields,encryptIssuerFingerPrint){
+    async function createCert(csrPEM,startDateText,expireDateText,privateKey,delegateSigningAuthority,lateralLimit,issuer,approvedCSRFields,encryptIssuerFingerPrint,certisfy_stripe_token){
         const crypto = pkijs.getCrypto(true);
         let signerPrivateKey =  fromPEM(issuer?issuer.csr.privateKey:privateKey);
       
