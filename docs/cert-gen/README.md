@@ -1,8 +1,8 @@
 ### Certisfy Certificate Provisioning API
 
 This API facilitates automated provisioning of certificates by trust anchors. For instance let's say you
-are a government agency (ex DMV) that wants to issue certificates for trusted information to the public,
-you can use this API to implement such services.
+are a government agency (ex DMV) that wants to issue certificates for trusted information to the public, or a bank
+who wants to issue cards to customers as certificates, you can use this API to implement such services.
 
 You can see all functions exposed by the cert-gen component API [here](https://github.com/CipherTrustee/certisfy-js/blob/master/src/core-pki/cert-gen.js).
 
