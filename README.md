@@ -1,8 +1,8 @@
 ### Certisfy SDK For Javascript
 
-This is the core implementation SDK of Certisfy for Javascript.
+This is the core implementation SDK of [Certisfy](https://certisfy.com) for Javascript.
 
-The Certisfy SDK consists of the following key components:
+The SDK consists of the following key components:
 
 1. [signer](https://github.com/CipherTrustee/certisfy-js/tree/master/docs/signer)
 2. [verifier](https://github.com/CipherTrustee/certisfy-js/tree/master/docs/verifier)
