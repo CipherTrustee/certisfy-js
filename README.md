@@ -1,6 +1,11 @@
 ### Certisfy SDK For Javascript
 
-This is the core implementation SDK of [Certisfy](https://certisfy.com) for Javascript.
+This is the core implementation SDK of [Certisfy](https://certisfy.com) for Javascript. 
+
+Certisfy ([https://certisfy.com](https://certisfy.com)) is a trust projection and information verification toolkit. 
+It can be used to meet a vast class of trust related needs for online use...even offline use.
+
+This SDK has no other dependencies except crypto functionality via pkijs ([https://pkijs.org/](https://pkijs.org/)) and associated utilities, the required dependencies are already included.
 
 The SDK consists of the following key components:
 
