@@ -2,7 +2,7 @@
 
 This API is for the verifier component of the Certisfy SDK. 
 
-This API is used to implement this [verifier](https://github.com/CipherTrustee/certisfy-verifier) for developer use.
+This API is used to implement this [reference implementation](https://github.com/CipherTrustee/certisfy-verifier) for developer use.
 
 You can see all functions exposed by the verifier component API [here](https://github.com/CipherTrustee/certisfy-js/blob/master/src/core-pki/verifier.js).
 
