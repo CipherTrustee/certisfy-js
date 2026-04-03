@@ -6,7 +6,7 @@ The Certisfy SDK exposes an extensive set of APIs for each component, almost all
 the component APIs and don't require the PKI platform API. 
 
 The PKI platform API, which is a remote end-point API, offers what can be thought of as value-add capabilities 
-that most implementations will find valuable.
+that most implementations will find worthwhile.
 
 You can see all functions exposed by the PKI platform API [here](https://github.com/CipherTrustee/certisfy-js/blob/master/src/core-api/api.js).
 

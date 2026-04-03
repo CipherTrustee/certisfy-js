@@ -8,8 +8,8 @@ It can be used to meet a vast class of trust related needs for online use...even
 Developers can use this SDK to implement trust projection and information verification into their own
 apps and services. 
 
-Essentially all core capabilities of the core Certisfy [app](https://certisfy.com/app/) can be integrated into third-party
-integrations with this SDK.
+Essentially all core capabilities of the core Certisfy client [app](https://certisfy.com/app/) can be integrated into third-party
+solutions with this SDK.
 
 This SDK has no other dependencies except crypto functionality via pkijs ([https://pkijs.org/](https://pkijs.org/)) and associated utilities, the required dependencies are already included.
 
