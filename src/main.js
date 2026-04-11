@@ -24,12 +24,14 @@
     import * as certisfySigner from './core-pki/signer.js';
     import * as certisfyVerifier from './core-pki/verifier.js'; 	
 
+    const {removeUndefinedFields} = helperUtil;
     const {sha2Hex,aliceKeyGen,bobKeyGen,ECDSA_SIGNER,AES_GCM_CIPHER} = cryptoUtil;
 	const {decodeCertificate,getCertificatePayload,certPayloadHasField,getCertIssuerFingerPrint,exportCertificate} = certUtil;
 	const {signRequest} = certisfyAPIAuth;
 	const {postDHExchange,getDHExchange,getSignature,getCertChain,postServiceRequest} = certisfyAPI;
 	const {buildTrustedCertChain,isTrustAnchor} = certisfyVerifier;
 	const {certField} = claimData;
+	
 
 	let {
     	PKI_CERT_VERSION,
@@ -80,15 +82,12 @@
 
     async function loadTrustRoots(useRoots){
       
-      	return new Promise((resolve,reject)=>{
-          
             const setRoot = (roots)=>{
               	trustRoots = roots;
               	trustChainRoot = trustRoots[0];
-                resolve(trustChainRoot,trustRoots);
             }
             
-            if(useRoots)//us provided
+            if(useRoots)//user provided
             	setRoot(useRoots);
             else
           	if(!getConfig().apiInfo || !getConfig().apiInfo.target){//use default included
@@ -96,13 +95,9 @@
             }
             else//fetch from registry
             {              
-              	sendRequest({
-                        action: "get-trust-roots"
-                }).then(roots => {
-                    setRoot(roots);
-                });
-            }
-        });      
+              	const roots = await sendRequest({action: "get-trust-roots"});                
+                setRoot(roots);
+            }  
     }
 
     function isIDElementHash(fieldName){
@@ -148,11 +143,11 @@
           		let request = {
                     method: useMethod,
                     headers: headers,
-                    body: new URLSearchParams(args)
+                    body: new URLSearchParams(removeUndefinedFields(args))
                 };
           
           		if(useMethod == "GET"){
-                	useURL = `${useURL}?${new URLSearchParams(args)}`
+                	useURL = `${useURL}?${new URLSearchParams(removeUndefinedFields(args))}`
                     delete request["body"];
                 }
           
@@ -235,6 +230,31 @@
         });      
     }
 
+    async function updateCertDerivationSourcePrivacy(signer_signature){
+      	return new Promise((resolve,reject)=>{
+          
+			sendRequest({
+                      "action":"update-cert-derivation-source-privacy",
+                      "signer_signature":(typeof signer_signature == "string"?signer_signature:JSON.stringify(signer_signature))
+            }).then(function(resp){
+                resolve(resp);
+            })
+        });      
+    }
+
+    async function updateCertDerivationSourceIssuerPrivacy(signer_signature){
+      	return new Promise((resolve,reject)=>{
+          
+			sendRequest({
+                      "action":"update-cert-derivation-source-issuer-privacy",
+                      "signer_signature":(typeof signer_signature == "string"?signer_signature:JSON.stringify(signer_signature))
+            }).then(function(resp){
+                resolve(resp);
+            })
+        });      
+    }
+
+
 	function configure({config,sdk}){
       	if(config){
             if(config.idAnchorElements)
@@ -283,6 +303,7 @@
       loadTrustRoots,
       setAPIInfo,
       updateCertTrustchainPrivacy,
+      updateCertDerivationSourcePrivacy,
       getEncryptedIssuerFingerPrint,
       getEmbededSignature,      
       

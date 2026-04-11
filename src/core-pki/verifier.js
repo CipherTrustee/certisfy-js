@@ -14,7 +14,7 @@
 	const {sha2Hex,hmacHex,bobsResponseKeyGen,aliceKeyGen,AES_GCM_CIPHER,base64DecodeToBin} = cryptoUtil;
 
     const {getDHExchange,postDHExchange,getSignature} = certisfyAPI;
-	const {decodeCertificate,getCertificatePayload,getCertIssuerFingerPrint,getCertFingerPrint,issuerIsPrivate,exportCertificate} = certUtil;
+	const {decodeCertificate,getCertificatePayload,getCertIssuerFingerPrint,getCertFingerPrint,issuerIsPrivate,derivationSourceIsPrivate,derivationSourceIssuerIsPrivate,exportCertificate,certPayloadHasField,getCertPayloadField,getCertDerivationSourceFingerPrint,getCertDerivationSourceIssuerFingerPrint} = certUtil;
 	const {setPlainFields,hasClaimField,hashPlainField,extractClaimPlainFields,getVerifiedCertificateField,isInternalField,isInternalFieldName,getVouches} = claimData;
 	const {getCertFromStore,getCertChainWithStatusFromStore,getCertChainFromStore,getLocalCert,isLocalCert,getCertChainFromLocalStore} = certStore;
 
@@ -88,7 +88,7 @@
         certVerification["certificateVerified"]=false;
         certVerification["chain"]=certChain;
       
-        certChain.push(await exportCertificate(leafCert,copyFromObject(chain[0],["issuer_finger_print","isTrustworthy"])));
+        certChain.push(await exportCertificate(leafCert,copyFromObject(chain[0],["issuer_finger_print","derivation_source_finger_print","derivation_source_issuer_finger_print","isTrustworthy"])));
       
         if(chain[0].status){
            certChain[certChain.length-1].status = chain[0].status;
@@ -107,6 +107,7 @@
            if(chain[0].authority_suspension_date)
              	certChain[certChain.length-1].authority_suspension_date = chain[0].authority_suspension_date;
         }
+        //console.log(`isTrustChainRoot(finger_print)`,finger_print,isTrustChainRoot(finger_print),validChain)
 
       	if(isTrustChainRoot(finger_print))
         {
@@ -114,12 +115,21 @@
             return certVerification;
         }
       
-		if(chain.length == 1 && issuerIsPrivate(chain[0])){
-            let isValidPrivateChain = (useChain && typeof useChain == "object" && !Array.isArray(useChain))?(await verifyPrivateCertChain(useChain)):false;
+      
+		//for private issuer, verifier needs to rely on PKI
+        //platform validation and verify the provided signature attesting to the validity of the
+        //chain.
+		if(chain.length == 1 && (issuerIsPrivate(chain[0]))){
+          
+          	let derivedFromCertCertificateVerified = true
+            if(certPayloadHasField(leafCert,"pki-cert-is-derived-from") && !derivationSourceIsPrivate(chain[0]))
+                derivedFromCertCertificateVerified = (await buildTrustedCertChain(await getCertDerivationSourceFingerPrint(chain[0]))).certificateVerified;              
+          
+            let isValidPrivateChain = await verifyPrivateCertChain(useChain);
           	//console.log("platform validate",isValidPrivateChain,validate,validChain/*,chain[0].isTrustworthy*/)
-			certVerification["certificateVerified"]= (validate && validChain && isValidPrivateChain /*&& chain[0].isTrustworthy*/);
+			certVerification["certificateVerified"]= ((typeof validate != "undefined" && validate == true) && validChain && isValidPrivateChain && derivedFromCertCertificateVerified /*&& chain[0].isTrustworthy*/);
             return certVerification;
-        }      
+        }
       
         try
         {
@@ -169,7 +179,7 @@
                         }
                     }
                   
-                    let exportedCert = await exportCertificate(issuerCert,copyFromObject(chain[i],["issuer_finger_print","isTrustworthy"]));
+                    let exportedCert = await exportCertificate(issuerCert,copyFromObject(chain[i],["issuer_finger_print","derivation_source_finger_print","derivation_source_issuer_finger_print","isTrustworthy"]));
                     certChain.push(exportedCert);
                   
                     if(chain[i].status){
@@ -192,10 +202,33 @@
 
                     cert = issuerCert;
 
+                    //console.log(`isTrustChainRoot(computedIssuerThumbprint)`,computedIssuerThumbprint,isTrustChainRoot(computedIssuerThumbprint),validChain)
                     if(isTrustChainRoot(computedIssuerThumbprint))
                     {
-                       certVerification["certificateVerified"]= ((typeof validate != "undefined" && validate == true) && validChain);
-                       return certVerification;
+                         if(certPayloadHasField(leafCert,"pki-cert-is-derived-from")){
+                              //for private derivation source, verifier needs to rely on PKI
+                           	  //platform validation and verify the provided signature attesting to the validity of the
+                           	  //chain.
+                              if(derivationSourceIsPrivate(chain[0])){
+                                  let isValidPrivateChain = await verifyPrivateCertChain(useChain);
+                                  //console.log("platform validate",isValidPrivateChain,validate,validChain/*,chain[0].isTrustworthy*/)
+                                
+                                  certVerification["certificateVerified"]= ((typeof validate != "undefined" && validate == true) && validChain && isValidPrivateChain /*&& chain[0].isTrustworthy*/);
+                                  return certVerification;
+                              }
+							  else
+                              {
+                                  let derivedFromCertCertificateVerified = (await buildTrustedCertChain(await getCertDerivationSourceFingerPrint(chain[0]))).certificateVerified
+                                  
+                                  certVerification["certificateVerified"]= ((typeof validate != "undefined" && validate == true) && validChain && derivedFromCertCertificateVerified);
+                                  return certVerification;
+                              }
+                         }
+                         else
+                         {
+                              certVerification["certificateVerified"]= ((typeof validate != "undefined" && validate == true) && validChain);
+                              return certVerification;
+                         }
                     }
                     continue;
                 }
@@ -465,12 +498,17 @@
       	return false;
     }
 
-    function isTrustRoot(fingerPrint){            
+   /*
+    *This is to represent the PKI platform root...**should be revisited**
+    */
+    function isTrustRoot(fingerPrint){           
       	return (fingerPrint == getConfig().trustRoots[0].finger_print);
     }  
   
-    function isTrustChainRoot(fingerPrint){            
-      	return (getConfig().trustChainRoot.finger_print == fingerPrint);
+    function isTrustChainRoot(fingerPrint){
+      	//console.log("isTrustChainRoot",getConfig().trustRoots,sdk.getConfig().trustRoots);
+      	//return (getConfig().trustChainRoot.finger_print == fingerPrint);
+      	return ((getConfig().trustRoots && getConfig().trustRoots.find(c=>c.finger_print == fingerPrint))?true:false);
     }
 
     function isTrustAnchorCert(cert,disallowDemoCert){
@@ -695,7 +733,14 @@
           return certChainVerificationEngine.verify();      
     }
 
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//for private cert chains (ex: private issuer or private derivation source), verifier needs to rely on PKI
+    //platform validation and verify the provided signature attesting to the validity of the chain.
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	async function verifyPrivateCertChain(trustChain){
+      	if(!trustChain || typeof trustChain != "object" || Array.isArray(trustChain))
+          	return false;
+      
       	let validChain = true;
       
       	if(!trustChain.validfrom_date || !trustChain.expiration_date){
@@ -731,10 +776,14 @@
 
       	signedString.push(`timestamp=${trustChain.signature.timestamp}`);
       
-        const signerCert = decodeCertificate(getConfig().trustChainRoot.cert_text);
-        let verified = await verifyText(signedString.join(""),trustChain.signature.signature,signerCert);
-        
-      	return (validChain && verified);
+      	for(const rootCert of getConfig().trustRoots){
+            const signerCert = decodeCertificate(/*getConfig().trustChainRoot.cert_text*/rootCert.cert_text);
+            let verified = await verifyText(signedString.join(""),trustChain.signature.signature,signerCert);
+
+          	if(verified)
+            	return (validChain && verified);
+        }
+      	return false;
     }
     
 	async function verifyDocument(signer,fields,flatten,contextLeafCert,hmacKeyMask){
@@ -1048,7 +1097,7 @@
                          }
                      }
                   
-                     if(getConfig().trustChainRoot && trustChain.certs[trustChain.certs.length-1].finger_print != getConfig().trustChainRoot.finger_print){//get the rest of the trust chain
+                     if(!isTrustChainRoot(trustChain.certs[trustChain.certs.length-1].finger_print) /*getConfig().trustChainRoot && trustChain.certs[trustChain.certs.length-1].finger_print != getConfig().trustChainRoot.finger_print*/){//get the rest of the trust chain
 
                          const resolveFullChain = async ()=>{
                              let issuerFingerprint = await getCertIssuerFingerPrint(trustChain.certs[trustChain.certs.length-1]);                     
@@ -1057,10 +1106,19 @@
                              trustChain.certs = await getCertChainWithStatusFromStore(trustChain.certs);                         
                          }
                        
-						 if(issuerIsPrivate(trustChain.certs[0])){
-                           
+						 if(issuerIsPrivate(trustChain.certs[0]) || derivationSourceIsPrivate(trustChain.certs[0]) || derivationSourceIssuerIsPrivate(trustChain.certs[0])){
+                             //get latest registry status information
 						     let chain = await getCertChainWithStatusFromStore(trustChain.certs);
-                             
+                           
+                             if(!derivationSourceIsPrivate(chain[0])){//derivation source is no longer private                                
+                                trustChain.certs[0].derived_from_cert_finger_print = chain[0].derived_from_cert_finger_print;                                
+                             }
+                           
+                             if(!derivationSourceIssuerIsPrivate(chain[0])){//derivation source issuer is no longer private                                
+                                trustChain.certs[0].derived_from_cert_issuer_finger_print = chain[0].derived_from_cert_issuer_finger_print;                                
+                             }
+                           
+                           
                            	 if(!issuerIsPrivate(chain[0])){//issuer is no longer private                                
                                 trustChain.certs[0].issuer_finger_print = chain[0].issuer_finger_print;                                
                                 await resolveFullChain()
@@ -1393,7 +1451,7 @@
 
         return (docVerificationContext.certChainVerification.certificateVerified && 
                 !docVerificationContext.failedDHExchangeNonceValidation &&
-                (/*docVerificationContext.certificateIsTrustAnchor ||*//*this.isEmbedSession()*/docVerificationContext.stickerClaimValidation || 
+                (/*docVerificationContext.certificateIsTrustAnchor ||*//*this.isEmbedSession()*/docVerificationContext.ignoreClaimIdentity || 
                 (docVerificationContext.pkiIdentityVerified && 
                 docVerificationContext.pkiIdentityReceiverMatch)) &&
                 (!docVerificationContext.sigStatusVerification || docVerificationContext.sigStatusVerification == "good") &&
@@ -1605,7 +1663,7 @@
         if(docVerificationContext.certChainVerification.chain.find(c=>c.finger_print == getConfig().demoTrustAnchorFingerprint))
            messageList.push("This claim's certificate was issued using the demo trust anchor certificate!!!");
 
-        if(/*!docVerificationContext.certificateIsTrustAnchor &&*/ /*!docVerificationContext.isEmbedSticker*/ /*!vm.isEmbedSession()*/!docVerificationContext.stickerClaimValidation)
+        if(/*!docVerificationContext.certificateIsTrustAnchor &&*/ /*!docVerificationContext.isEmbedSticker*/ /*!vm.isEmbedSession()*/!docVerificationContext.ignoreClaimIdentity)
         {
             if(!docVerificationContext.pkiIdentityVerified)
             {      

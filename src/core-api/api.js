@@ -11,24 +11,27 @@
         });      
     }
 
-    async function getCSR(csr_id){
+    async function getCSR(params){
       	return new Promise((resolve,reject)=>{          
-			sendRequest({
-              "pki_action":"get-csr",
-              "csr_id":csr_id
-            }).
+			sendRequest(Object.assign({"pki_action":"get-csr"},params)).
             then(function(resp){
                 resolve(resp);
             })
         });      
     }
 
-    async function deleteCSR(csr_id){
+    async function updateCSR(params){
+      	return new Promise((resolve,reject)=>{
+			sendRequest(Object.assign({"pki_action":"update-csr"},params)).
+            then(function(resp){
+                resolve(resp);
+            })
+        });      
+    }
+
+    async function deleteCSR(params){
       	return new Promise((resolve,reject)=>{          
-			sendRequest({
-              "pki_action":"delete-csr",
-              "csr_id":csr_id
-            }).
+			sendRequest(Object.assign({"pki_action":"delete-csr"},params)).
             then(function(resp){
                 resolve(resp);
             })
@@ -196,6 +199,7 @@
 	export  {
       postCSR,
       getCSR,
+      updateCSR,
       deleteCSR,
 
       postCert,

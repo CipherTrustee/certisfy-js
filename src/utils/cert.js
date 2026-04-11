@@ -53,6 +53,31 @@
 		return (certPayloadHasField(cert.cert_text,"pki-is-private-issuer","true") && !cert.issuer_finger_print);
     }
 
+
+	async function getCertDerivationSourceFingerPrint(cert){
+              
+        if(cert.derived_from_cert_finger_print && cert.derived_from_cert_finger_print.trim().length>0)
+          return cert.derived_from_cert_finger_print;
+      
+        return getCertPayloadField(cert.cert_text,"pki-cert-is-derived-from");      
+    }
+
+	async function getCertDerivationSourceIssuerFingerPrint(cert){
+              
+        if(cert.derived_from_cert_issuer_finger_print && cert.derived_from_cert_issuer_finger_print.trim().length>0)
+          return cert.derived_from_cert_issuer_finger_print;
+      
+        return getCertPayloadField(cert.cert_text,"pki-cert-is-derived-from-issuer");      
+    }
+
+	function derivationSourceIsPrivate(cert){
+		return (certPayloadHasField(cert.cert_text,"pki-is-private-derived-from-cert","true") && !cert.derived_from_cert_finger_print);
+    }
+
+	function derivationSourceIssuerIsPrivate(cert){
+		return (certPayloadHasField(cert.cert_text,"pki-is-private-derived-from-cert-issuer","true") && !cert.derived_from_cert_issuer_finger_print);
+    }
+
     /*
 	async function getCertIssuerFingerPrint(cert){
        let decodedCert = typeof cert == "string"?decodeCertificate(cert):cert;
@@ -88,7 +113,7 @@
         },(data?data:{}));
     }
 
-	async function extractCertPublicKey(pem){
+	async function extractCertPublicKey(pem,signAlg){
      	let publicKey  = Object.assign(signAlg=="ECDSA"?{"kty":"EC","ext":true}:{"kty":"RSA","ext":true,"alg":"RS256"},decodeCertificate(pem).subjectPublicKeyInfo.parsedKey.toJSON());
         
         publicKey  = await crypto.subtle.importKey("jwk",publicKey,(signAlg=="ECDSA"?{
@@ -158,10 +183,59 @@
         return certPayload[fieldName];
     }
 
+
+    async function extractIdentityAnchorElement(signedDocument,idAnchorElements){
+            
+                //does the id anchor cert have an identity anchor element (SSN,DLN..etc) on it
+                for(let idElementKey in idAnchorElements)
+                {
+                  	let mappedSignedDocument = [];
+                  
+                    let idAnchorEl = idElementKey;
+                    let signedAnchorEl = null;
+                    for(let i=0;i<signedDocument.length;i++)
+                    {
+                        let saEl = signedDocument[i];
+                        //create a plain hashmap version of document
+                        let mappedDocField = {};
+                      	mappedSignedDocument.push(mappedDocField);
+                      
+                      	let mappedDocPlainField = {};
+                      	Object.assign(mappedDocPlainField,saEl.plainField);                      
+                      	mappedDocField["plainField"]=mappedDocPlainField;                        
+                      
+                        if(saEl.maskedField)
+                      	{
+                            let mappedDocMaskedField = {};
+                            Object.assign(mappedDocMaskedField,saEl.maskedField);                      
+                            mappedDocField["maskedField"]=mappedDocMaskedField;
+                      	}
+                        //console.log("loop"+i,saEl,idAnchorEl)
+                        if(saEl.plainField.name == idAnchorEl)
+                        {
+                            signedAnchorEl = saEl.plainField.value.toUpperCase().replaceAll("-","").replaceAll(" ","").toUpperCase();                            
+                        }
+                    }
+
+                    if(signedAnchorEl != null)
+                    {
+						return {
+                          "value":signedAnchorEl,
+                          "name":idAnchorEl
+                        };
+                    }
+                }
+    }
+
+
 	export  {
       getCertIssuer,
       getCertIssuerFingerPrint,
       issuerIsPrivate,
+      derivationSourceIsPrivate,
+      getCertDerivationSourceFingerPrint,
+      getCertDerivationSourceIssuerFingerPrint,
+      derivationSourceIssuerIsPrivate,
       pemEncodeCert,
       exportCertificate,
       certPayloadHasField,
@@ -169,5 +243,6 @@
       getCertificatePayload,
       extractCertPublicKey,
       getCertFingerPrint,
-      decodeCertificate
+      decodeCertificate,
+      extractIdentityAnchorElement
     };

@@ -177,7 +177,47 @@
         	return null;
     }
 
+    async function generateIDSig(idAnchorCertObj,pkiSpUri,includeTrustChain,isPrivate=true){
+        let isVersioned = certPayloadHasField(idAnchorCertObj.cert_text,"pki-cert-version");
+      
+        let idElementInfo = await extractIdentityAnchorElement(idAnchorCertObj);
+      
+        let idFields = await selectCertFields([idElementInfo.elementName+(isVersioned?"":"_HASH")],idAnchorCertObj,null);
+      
+        //hash id before sending it
+        if(isVersioned){
+            let plainField = idFields.plainFields[0];
+          
+          	let idField = {
+              "name":(await sha2Hex(Object.keys(plainField)[0])),
+              "value": (await sha2Hex(plainField[Object.keys(plainField)[0]])),
+              "hmacKey":idFields.maskedFields[0].hmacKey
+            };
+            
+            plainField[idField.name] = idField.value;
+            delete plainField[Object.keys(plainField)[0]];
+          
+            //create new mask based on hashed plain field
+            idFields.maskedFields.splice(0,idFields.maskedFields.length);
+   			let maskedField = await createPrivateField(idField,false);
+            idFields.maskedFields.push(maskedField);
+        }
+      	const plainFields = idFields.plainFields;
+      	delete idFields.plainFields;
+      
+        let idCertSig = await signClaim(idAnchorCertObj,JSON.stringify(idFields),plainFields,null,pkiSpUri,includeTrustChain);
+
+      	if(isPrivate){
+            idCertSig["hashedPlainFields"] = idCertSig.plainFields;//id plainFields is already hashed
+            delete idCertSig["plainFields"];
+            delete idCertSig["hmacedPlainFields"];
+        }
+      
+      	return idCertSig;
+    }
+
     async function attachIdentity(element,elementName,pkiSpUri,enclosedSig,idAnchorCertObj,includeTrustChain,vouchedForClaimIdentities,isForPrivatePersona){
+        /*
         let isVersioned = certPayloadHasField(idAnchorCertObj.cert_text,"pki-cert-version");
       
         let idFields = await selectCertFields([elementName+(isVersioned?"":"_HASH")],idAnchorCertObj,null);
@@ -195,17 +235,16 @@
             plainField[idField.name] = idField.value;
             delete plainField[Object.keys(plainField)[0]];
           
+            //create new mask based on hashed plain field
             idFields.maskedFields.splice(0,idFields.maskedFields.length);
    			let maskedField = await createPrivateField(idField,false);
-            idFields.maskedFields.push(maskedField);       
+            idFields.maskedFields.push(maskedField);
         }
       	const plainFields = idFields.plainFields;
       	delete idFields.plainFields;
+        */
       
-        let idCertSig = await signClaim(idAnchorCertObj,JSON.stringify(idFields),plainFields,null,pkiSpUri,includeTrustChain);
-        idCertSig["hashedPlainFields"] = idCertSig.plainFields;//id plainFields is already hashed
-        delete idCertSig["plainFields"];
-      	delete idCertSig["hmacedPlainFields"];
+        let idCertSig = await generateIDSig(idAnchorCertObj,pkiSpUri,enclosedSig,includeTrustChain);
       
         return await wrapCertIdentity(JSON.stringify(idCertSig),pkiSpUri,enclosedSig,includeTrustChain,vouchedForClaimIdentities,isForPrivatePersona);
     }
@@ -281,11 +320,30 @@
       	return maskedField;
     }
 
-    async function createClaimFields(selectedFields,isPrivate,hashInput=true){
+	async function createIDLinkField(cert){
+          let enclosedSigIdLink = cert.csr.signedDocument.find(fd=> fd.plainField.name == "pki-id-link");
+          if(typeof enclosedSigIdLink == "undefined" || enclosedSigIdLink == null)
+              throw `The certificate (${cert.finger_print}) doesn't have an identity for creating id link field.`;
+      
+          let idLinkPlainField = {
+            "name":enclosedSigIdLink.plainField.name,
+            "value":enclosedSigIdLink.plainField.value
+          };
+      
+      	  if(enclosedSigIdLink.maskedField)
+            idLinkPlainField["hmacKey"] = enclosedSigIdLink.maskedField.hmacKey;
+      
+          return idLinkPlainField;
+    }
+
+    async function createClaimFields(selectedFields,isPrivate,hashInput=true,cert){
       	
         let vm = this;
         let plainFields = [];
         let maskedFields = [];          
+      
+        if(cert && (await createIDLinkField(cert)))
+        	selectedFields.push((await createIDLinkField(cert)));      
         
       	for(const field of selectedFields){               
               if(isPrivate)
@@ -566,7 +624,7 @@
       
 			if(includeTC){
                 //This will recursively resolve the trust chain and attach the whole thing
-                let trustChain = await getCertChainFromStore(signer.finger_print,false,false);
+                let trustChain = await getCertChainFromStore(signer.finger_print);
               
                 //prefer registry chain over local store
               	if((!trustChain || !trustChain.certs || trustChain.certs.length == 0 || trustChain.certs[0].fromLocalStore) && (signer.trustChain && signer.trustChain.certs && signer.trustChain.certs.length>0))
@@ -639,8 +697,17 @@
             //only include pki-id-link in signature since it is used for identity generation.
             //The basic idea is to only sign masked fields and expose plain fields for signature 
             //verification. Limit private information leak. this needs to be plain.
-            let idLinkPlainFields = Object.assign({},{"plainFields":filterPlainFields(plainFields,["pki-id-link"])});
-            
+            let idLinkPlainFields = Object.assign({},{"plainFields":filterPlainFields(plainFields,["pki-id-link"])/*.filter(f=>f["pki-id-link"])*/});
+          
+            /*
+            let enclosedSigIdLink = signer.csr.signedDocument.find(fd=> fd.plainField.name == "pki-id-link");
+          
+          	if((typeof enclosedSigIdLink == "undefined" || enclosedSigIdLink == null))
+                throw `The claim certificate (${signer.finger_print}) doesn't have an identity link.`;            
+          
+            let idLinkPlainFields = Object.assign({},{"plainFields":[{[enclosedSigIdLink.plainField.name]:enclosedSigIdLink.plainField.value}]});
+            */
+          
             signaturePayload["plainFields"]=idLinkPlainFields.plainFields;
             //if(certPayloadHasField(signer.cert_text,"pki-cert-version"))
             //    signaturePayload["hashedPlainFields"]= await getHashedPlainFields(idLinkPlainFields.plainFields);
@@ -695,5 +762,7 @@
       selectCertFields,
       getVouchedClaimIdentities,
       executeDHExchange,
+      generateIDSig,
+      createIDLinkField,
       configure
     };

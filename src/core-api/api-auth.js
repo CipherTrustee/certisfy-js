@@ -169,6 +169,9 @@ async function signRequest(args,apiTarget,signingInfo){
 	if(action == "get-csr")
       	return getCSR(args,apiTarget,signingInfo)  
   
+	if(action == "update-csr")
+      	return updateCSR(args,apiTarget,signingInfo)
+  
 	if(action == "delete-csr")
       	return deleteCSR(args,apiTarget,signingInfo)
 
@@ -232,12 +235,6 @@ async function postCSR(args,apiTarget,signingInfo){
 
     //lexicographically ordered request parameters
   
-    //pki_sp_uri - optional
-    if(args["pki_sp_uri"]){
-      queryString += (ampersand+"pki_sp_uri="+args["pki_sp_uri"]);
-      ampersand = "&";
-    }
-  
     //cert_download_key - optional
     if(args["cert_download_key"]){
       queryString += (ampersand+"cert_download_key="+args["cert_download_key"]);
@@ -278,7 +275,13 @@ async function postCSR(args,apiTarget,signingInfo){
   	if(args["pki_action"]){
   	  queryString += (ampersand+"pki_action="+args["pki_action"]);
       ampersand = "&";
-  	}  
+  	}    
+  
+    //pki_sp_uri - optional
+    if(args["pki_sp_uri"]){
+      queryString += (ampersand+"pki_sp_uri="+args["pki_sp_uri"]);
+      ampersand = "&";
+    }  
   
     //private_data - optional
   	if(args["private_data"]){
@@ -313,7 +316,7 @@ async function postCSR(args,apiTarget,signingInfo){
       "timestamp":timestamp,
       "authorization":(await generateBearerToken(signingInfo,stringToSign)),
       "method":"POST",
-      "url":apiTarget+"/dh-exchange"
+      "url":apiTarget+"/pki/csr"
     }
 }
 
@@ -372,6 +375,56 @@ async function getCSR(args,apiTarget,signingInfo){
       "timestamp":timestamp,
       "authorization":(await generateBearerToken(signingInfo,stringToSign)),
       "method":"GET",
+      "url":useAPITarget
+    }
+}
+
+async function updateCSR(args,apiTarget,signingInfo){
+    //********************************Begin signature base string********************
+  	let useAPITarget = args["csr_id"]?(apiTarget+"/pki/csr/"+args["csr_id"]):apiTarget+"/pki/csr";
+  
+    let stringToSign = "GET\n";
+    stringToSign += `${useAPITarget}\n`;
+
+    let timestamp = new Date().getTime();
+    let queryString = "";
+    let ampersand = "";
+
+    //lexicographically ordered request parameters
+  
+    //csr_id - optional
+    if(args["csr_id"]){
+      queryString += (ampersand+"csr_id="+args["csr_id"]);
+      ampersand = "&";
+    }
+  
+    //payload - optional
+    if(args["payload"]){
+  	  queryString += (ampersand+"payload="+args["payload"]);
+      ampersand = "&";
+    } 
+  
+    //pki_action - optional
+  	if(args["pki_action"]){
+  	  queryString += (ampersand+"pki_action="+args["pki_action"]);
+      ampersand = "&";
+  	}    
+
+    //signer_signature - optional
+  	if(args["signer_signature"]){
+      queryString += (ampersand+"signer_signature="+args["signer_signature"]);
+      ampersand = "&";
+  	}
+  
+  
+    stringToSign += "\n"+timestamp;
+    //console.info("stringToSign:"+stringToSign);
+    //********************************End signature base string********************
+  
+    return {
+      "timestamp":timestamp,
+      "authorization":(await generateBearerToken(signingInfo,stringToSign)),
+      "method":"POST",
       "url":useAPITarget
     }
 }
@@ -549,7 +602,7 @@ async function postCert(args,apiTarget,signingInfo){
       "timestamp":timestamp,
       "authorization":(await generateBearerToken(signingInfo,stringToSign)),
       "method":"POST",
-      "url":apiTarget+"/dh-exchange"
+      "url":apiTarget+"/pki/cert"
     }
 }
 
@@ -1202,6 +1255,7 @@ export {
   
     postCSR,
     getCSR,
+    updateCSR,
     deleteCSR,
   
     postCert,

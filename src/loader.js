@@ -18,7 +18,7 @@
         },mainEntry)
       
     	sdk.configure({config,sdk});
-        sdk.loadTrustRoots();
+      	await sdk.loadTrustRoots();
         return sdk;
     }
 

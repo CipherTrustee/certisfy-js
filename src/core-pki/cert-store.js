@@ -58,11 +58,17 @@
           
             if(chainStatus[i].hasOwnProperty("issuer_finger_print"))
               cert.issuer_finger_print =  chainStatus[i].issuer_finger_print;
+          
+            if(chainStatus[i].hasOwnProperty("derivation_source_finger_print"))
+              cert.derivation_source_finger_print =  chainStatus[i].derivation_source_finger_print;
+          
+          	if(chainStatus[i].hasOwnProperty("derivation_source_issuer_finger_print"))
+              cert.derivation_source_issuer_finger_print =  chainStatus[i].derivation_source_issuer_finger_print;
         }
       	return _trustChain;
     }
 
-    async function getCertChainFromStore(finger_print,chain_health_check,ignoreIssuerPrivacy=true,ignoreLocalStore=false){
+    async function getCertChainFromStore(finger_print,chain_health_check,ignoreIssuerPrivacy=true,ignoreDerivationSourcePrivacy=true,ignoreDerivationSourceIssuerPrivacy=true,ignoreLocalStore=false){
       	return new Promise((resolve,reject)=>{
           
             if(!getConfig().apiInfo.target)
@@ -86,7 +92,7 @@
                 else
                 if(!ignoreLocalStore && getConfig().clientApp && getConfig().clientApp.findCertificate(finger_print))
                 {
-                  	getCertChainFromLocalStore(finger_print,chain_health_check,ignoreIssuerPrivacy).then((chain)=>{
+                  	getCertChainFromLocalStore(finger_print,chain_health_check,ignoreIssuerPrivacy,ignoreDerivationSourcePrivacy,ignoreDerivationSourceIssuerPrivacy).then((chain)=>{
                     	resolve(chain)
                     })
                     //exportCertificate(getConfig().clientApp.findCertificate(finger_print).cert_text).then((cert)=>resolve({"certs":[Object.assign(cert,{"fromLocalStore":true})]}));
@@ -102,7 +108,7 @@
 	async function getLocalCert(finger_print){
         if(getConfig().clientApp){
             let certEntry = getConfig().clientApp.findCertificate(finger_print);
-            let certExport = await exportCertificate(certEntry.cert_text,Object.assign({"fromLocalStore":true},copyFromObject(certEntry,["issuer_finger_print"])))
+            let certExport = await exportCertificate(certEntry.cert_text,Object.assign({"fromLocalStore":true},copyFromObject(certEntry,["issuer_finger_print","derivation_source_finger_print","derivation_source_issuer_finger_print"])))
             return {certExport,certEntry};
         }
     }
@@ -111,7 +117,7 @@
         return (getConfig().clientApp && getConfig().clientApp.findCertificate(finger_print));
     }
 
-	async function getCertChainFromLocalStore(finger_print,chain_health_check,ignoreIssuerPrivacy){
+	async function getCertChainFromLocalStore(finger_print,chain_health_check,ignoreIssuerPrivacy,ignoreDerivationSourcePrivacy,ignoreDerivationSourceIssuerPrivacy){
           //attempt to resolve chain, always prioritize registry lookup over 
           //local store or attached trust chains
 
@@ -120,11 +126,17 @@
           certs.push(cert.certExport);
 
           const issuer = await getCertIssuerFingerPrint(cert.certExport);                        
-          if(issuer != "Prometheus" && (ignoreIssuerPrivacy || !cert.certEntry.isUsingPrivateIssuer))
-            certs.push(... (await getCertChainFromStore(issuer,chain_health_check,true)).certs);
+          if(issuer != "Prometheus")
+            certs.push(... (await getCertChainFromStore(issuer,chain_health_check,(ignoreIssuerPrivacy || !cert.certEntry.isUsingPrivateIssuer),(ignoreDerivationSourcePrivacy || !cert.certEntry.isUsingPrivateDerivedFromSource),(ignoreDerivationSourceIssuerPrivacy || !cert.certEntry.isUsingPrivateDerivedFromSourceIssuer))).certs);
 
       	  if(!ignoreIssuerPrivacy && cert.certEntry.isUsingPrivateIssuer)
             delete cert.certExport["issuer_finger_print"];
+      
+      	  if(!ignoreDerivationSourcePrivacy && cert.certEntry.isUsingPrivateDerivedFromSource)
+            delete cert.certExport["derivation_source_finger_print"];
+      
+          if(!ignoreDerivationSourceIssuerPrivacy && cert.certEntry.isUsingPrivateDerivedFromSourceIssuer)
+            delete cert.certExport["derivation_source_issuer_finger_print"];
       
           return {"certs":certs};
     }

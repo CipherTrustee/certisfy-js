@@ -3,6 +3,14 @@
     	return !(typeof str == "undefined" || str == null)
     }
 
+	function removeUndefinedFields(object,includingNulls=true){
+    	for(let fieldName of Object.keys(object)){
+        	if(typeof object[fieldName] == "undefined" || (includingNulls && object[fieldName] == null))
+              	delete object[fieldName]
+        }
+      	return object;
+    }
+
 	function copyFromObject(src,fields){
     	const resp = {};
       	for(const field of fields){
@@ -50,6 +58,7 @@
 
 	export {
     	isValidString,
+        removeUndefinedFields,
         copyFromObject,
         formatTo2Digits,
         textToClaimObject,

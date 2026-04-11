@@ -11,15 +11,143 @@
     import * as claimData from './claim-data.js';
 
 	const {fromPEM,toPEM,sha2Hex,hmacHex,base64ToArrayBuffer,base64EncodeBin,randomUUID,AES_GCM_CIPHER} = cryptoUtil;
-	const {getCertFingerPrint,certPayloadHasField,pemEncodeCert} = certUtil;
-	const {signClaim,signText,selectCertFields} = certisfySigner;
-	const {wrapCertIdentity} = certisfyAPI;
+	const {getCertFingerPrint,certPayloadHasField,pemEncodeCert,extractIdentityAnchorElement} = certUtil;
+	const {signClaim,signText,selectCertFields,createPrivateField,generateIDSig,wrapCertIdentity} = certisfySigner;
+	const {updateCSR} = certisfyAPI;
 
     //access to properly configured modules
     let sdk;
 
 	function getConfig(){
     	return sdk?sdk.getConfig():defaultConfig;
+    }
+
+	async function createCertField(field,isPrivate){
+        let fieldName = field.name;
+        let fieldVal =  field.value;
+
+        let maskedField = {};
+        let plainField = {}; 
+          	        
+        plainField["name"]=fieldName;
+        plainField["value"]=fieldVal;
+
+        if(isPrivate)
+        {
+            let hmacKey = randomUUID().replaceAll("-","");
+          	let fieldNameHash = await sha2Hex(fieldName);
+        	let fieldHash = (fieldVal?await sha2Hex(fieldVal):fieldVal);
+          
+            let maskFieldName = hmacHex(hmacKey,fieldNameHash);
+            let maskedFieldValue = hmacHex(hmacKey,fieldHash);
+
+            maskedField["name"]=maskFieldName;
+            maskedField["value"]=maskedFieldValue;
+            maskedField["hmacKey"]=hmacKey;
+        }    
+      	
+      	return isPrivate?{plainField,maskedField}:{plainField};
+    }
+
+	async function createSignedDocument(fields,isPrivate){
+        const signedDocFieldList = [];
+        for(let fieldName in fields)
+        {
+            signedDocFieldList.push(await createCertField({"name":fieldName,"value":fields[fieldName]},isPrivate));
+        }
+      	return signedDocFieldList;
+    }
+
+	async function prepareCSRDocForSigning(csr,reviewedFields,preApprovedFields=[{"name":"pki-id-link","preventMask":true}]){
+        //update csr to include only fields reviewed and approved
+        let approvedCSRFields = [];
+        for(let i=0;i<reviewedFields.length;i++){                
+          		const signedDocField = csr.signedDocument.find(f=>f.plainField.name == reviewedFields[i].name);
+
+          		let isOverride = false;
+          		//if there is a field in csrLookup that is added or altered by issuer, update signed doc
+          		if(!signedDocField){
+                  	csr.signedDocument.push(await createCertField(reviewedFields[i],csr.isPrivate))
+                    isOverride = true;
+                }
+                else
+          		if(signedDocField.plainField.value != reviewedFields[i].value){
+                    csr.signedDocument.splice(csr.signedDocument.indexOf(signedDocField),1)
+                  	csr.signedDocument.push(await createCertField(reviewedFields[i],csr.isPrivate))
+                    isOverride = true;
+                }
+          
+          		if(reviewedFields[i].preventMask || !csr.isPrivate){
+            		approvedCSRFields.push({
+                      "name":reviewedFields[i].name,
+                      "value":reviewedFields[i].value,
+                      "isOverride":isOverride
+                    });//plain field
+                }
+                else
+          		{
+                    for(let j=0;j<csr.signedDocument.length;j++){
+                         let maskedField = csr.signedDocument[j].maskedField;                  
+                         if(maskedField){
+                             let hmacKey    = maskedField.hmacKey;
+                             let maskedName = maskedField.name;
+                             let maskedVal  = maskedField.value;
+
+                             let fieldNameHash = await sha2Hex(reviewedFields[i].name);
+                             let fieldHash = (reviewedFields[i].value?await sha2Hex(reviewedFields[i].value):reviewedFields[i].value);
+
+                             if(hmacKey && hmacHex(hmacKey,fieldNameHash) == maskedName && hmacHex(hmacKey,fieldHash) == maskedVal){
+                                approvedCSRFields.push({
+                                  "name":maskedName,
+                                  "value":maskedVal,
+                                  "isOverride":isOverride
+                                });//masked field
+                                break;
+                             }
+                         }
+                    }
+                }
+        }
+      
+      	//attach preapproved  fields      
+        csr.signedDocument.forEach(function(field,i){
+          	const preApprovedField = preApprovedFields.find(f=>f.name == field.plainField.name);
+          
+          	if(preApprovedField && !approvedCSRFields.find(f=>f.name == field.plainField.name)){
+              
+                if(preApprovedField.preventMask || !csr.isPrivate)
+                	approvedCSRFields.push({"name":field.plainField.name,"value":field.plainField.value})
+              	else
+                if(field.maskedField)
+                	approvedCSRFields.push({"name":field.maskedField.name,"value":field.maskedField.value})
+            }
+        });
+      
+      	return {approvedCSRFields}
+    }
+
+	async function updateAlteredCSR(csr,approvedCSRFields,encryptionKey){
+        //save alterations to CSR for user
+        if(approvedCSRFields.find(f=>f.isOverride)){
+            if(encryptionKey){
+              	csr.altered = true;
+              	let csrPayload = await AES_GCM_CIPHER.encryptMessage(encryptionKey,JSON.stringify(csr));
+
+                await updateCSR({
+                  "action":"update-csr",
+                  "csr_id":csr.id,
+                  "payload":csrPayload
+                });
+            }
+            else
+            {
+                return {
+                  "status":"error",
+                  "message":`Unable to reflect certificate changes back to user, \nIf changes were made to the certificate that differ from the certificate request, the user may not be able to use the certificate in a manner expected.`
+                }
+            }
+        }
+      	return {"status":"success"};
     }
 
     async function createPKCS10Internal(hashAlg, signAlg,csrText,keyPair) {
@@ -180,7 +308,7 @@
       	let ownerIdCloak = null;
         let identityCertSig = null;
         if(_identityCertSig){
-            if(typeof _identityCertSig == "string" && _identityCertSig.length>0)
+            if(typeof _identityCertSig == "string" && _identityCertSig.trim().length>0)
              	identityCertSig = JSON.parse(_identityCertSig);
             else
             if(typeof _identityCertSig == "object")
@@ -198,27 +326,42 @@
         }
         else
       	if(idCert){
+            /*
             let isVersioned = certPayloadHasField(idCert.cert_text,"pki-cert-version");
           
-            let idElementInfo = await extractIdentityAnchorElement(idCert);
+            let idElementInfo = await extractIdentityAnchorElement(idCert.csr.signedDocument,getConfig().idAnchorElements);
             let idFields = await selectCertFields([idElementInfo.elementName+(isVersioned?"":"_HASH")],idCert);
-      
+      		console.log("idElementInfo",idElementInfo,idFields)
         	//hash id before sending it
 			if(isVersioned){
                 let plainField = idFields.plainFields[0];
-                plainField[await sha2Hex(Object.keys(plainField)[0])] = await sha2Hex(plainField[Object.keys(plainField)[0]]);
+
+                let idField = {
+                  "name":(await sha2Hex(Object.keys(plainField)[0])),
+                  "value": (await sha2Hex(plainField[Object.keys(plainField)[0]])),
+                  "hmacKey":idFields.maskedFields[0].hmacKey
+                };
+
+                plainField[idField.name] = idField.value;
                 delete plainField[Object.keys(plainField)[0]];
-        	}
+
+                //create new mask based on hashed plain field
+                idFields.maskedFields.splice(0,idFields.maskedFields.length);
+                let maskedField = await createPrivateField(idField,false);
+                idFields.maskedFields.push(maskedField);
+            }
           
             let idCertSig = await signClaim(idCert,JSON.stringify(idFields),null,null,"certisfy.com",includeIdCertSigTrustChain);
-
+			*/
+          
+            let idCertSig = await generateIDSig(idCert,"certisfy.com",includeIdCertSigTrustChain)            
+            
             let pkiIdentity = await wrapCertIdentity(JSON.stringify(idCertSig),"certisfy.com",JSON.stringify(idCertSig));//idCert?await extractIdentityAnchorElement(idCert,randomUUID().replaceAll("-","")):null;
             let certIdInfo = pkiIdentity["pki-owner-id-info"];
             ownerIdCloak = certIdInfo?certIdInfo.ownerIdCloak:null;
         }
 
-        let signedDocFieldList = [];
-
+		let signedDocFieldList  =  [];
         let maskedPayload = {};
         let plainPayload = {"pki-asym-encryption-key":asymEncryptionKeyPEM,"pki-cert-version":getConfig().PKI_CERT_VERSION};
       	      
@@ -251,8 +394,33 @@
                 }
              }
 
+          
+          	 signedDocFieldList  =  await createSignedDocument(csrFields,isPrivate)
+             for(const signedDocField of signedDocFieldList){
+                plainPayload[signedDocField.plainField.name]=signedDocField.plainField.value;
+                if(isPrivate)
+                  	maskedPayload[signedDocField.maskedField.name]=signedDocField.maskedField.value;
+             }
+             
+             /*
              for(let fieldName in csrFields)
              {
+                const {plainField,maskedField} = await createCertField({"name":fieldName,"value":csrFields[fieldName]},isPrivate)
+                
+                plainPayload[plainField.name]=plainField.value;
+               
+                let fieldContainer = {};
+                fieldContainer["plainField"]=plainField;
+               
+               	if(isPrivate){
+                   maskedPayload[maskedField.name]=maskedField.value;
+                   fieldContainer["maskedField"]=maskedField;
+                }
+               
+                signedDocFieldList.push(fieldContainer);
+               
+               
+                /*
                 let field = csrFields[fieldName];
                 plainPayload[fieldName]=field;
 
@@ -271,8 +439,8 @@
 
                 if(isPrivate)
                 {
-                    let maskFieldName = hmacHex(hmacKey,/*fieldName*/fieldNameHash);
-                    let maskedFieldValue = hmacHex(hmacKey,/*field*/fieldHash);
+                    let maskFieldName = hmacHex(hmacKey,/*fieldName* /fieldNameHash);
+                    let maskedFieldValue = hmacHex(hmacKey,/*field* /fieldHash);
                   
                     //fieldContainer["hmacKey"]=hmacKey;
                     fieldContainer["maskedField"]=maskedField;
@@ -282,7 +450,8 @@
                     maskedPayload[maskFieldName]=maskedFieldValue;
                 }
                 signedDocFieldList.push(fieldContainer);
-             }   
+          		* /
+             }   */
         }    
         //these should not be masked
         maskedPayload["pki-asym-encryption-key"]=asymEncryptionKeyPEM;
@@ -328,7 +497,7 @@
               ["encrypt", "decrypt"]);
         }*/
       
-        let csrDetails = {"csr":csrText,"signedDocument":signedDocFieldList};
+        let csrDetails = {"csr":csrText,"signedDocument":signedDocFieldList,"isPrivate":isPrivate};
         if(useStrongIdProofing && idCert)
                 Object.assign(csrDetails,{"identity":idCert});
       
@@ -462,7 +631,7 @@
         //extract payload
         for (let i = 0; i < csr.attributes.length; i++) {
 
-          if(csr.attributes[i].type == "1.2.840.113549.1.9.14"){        
+          if(csr.attributes[i].type == "1.2.840.113549.1.9.14"){
             let extensions = pkijs.Extensions.fromBER(csr.attributes[i].values[0].toBER(false)).extensions;
 
             for (let j = 0; j < extensions.length; j++) {
@@ -491,6 +660,8 @@
       	if(approvedCSRFields){
             let safeCSRFields = {};
           	let preApprovedFields = ["pki-asym-encryption-key","pki-cert-version"];
+          
+          	//enforce strict CSR match to approved fields
             for(let fieldName in payLoad){
               
               	if(preApprovedFields.includes(fieldName)){
@@ -498,17 +669,30 @@
                    continue;
                 }
               
-                for(let j=0;j<approvedCSRFields.length;j++){
+                /*for(let j=0;j<approvedCSRFields.length;j++){                  
                    if(fieldName == approvedCSRFields[j].name && payLoad[fieldName] == approvedCSRFields[j].value){
                       safeCSRFields[fieldName] = payLoad[fieldName];
                       break;
                    }
-                }
+                }*/
               
-                if(!safeCSRFields[fieldName] && !confirm(`Unapproved field '${fieldName}' found in certificate request, it will be ignored.\n Do you want to continue with issuing the certificate?`))
-                  	return;
+              	const unapprovedField =  (!safeCSRFields[fieldName] && !approvedCSRFields.find(f=>f.name == fieldName /*&& f.isOverride*/));
+              	//if it is doesn't match approved field by name & value, and isn't a value override
+                if(unapprovedField){
+                    /*if(typeof confirm == "function" && !confirm(`Unapproved field '${fieldName}' found in certificate request, it will be ignored.\n Do you want to continue with issuing the certificate?`))
+                        return;
+                    else*/
+                        console.log(`Unapproved field '${fieldName}' found in certificate request, it will be ignored.`);
+                }
             }
+          
+          	//incorporate all approved fields
+          	for(const field of approvedCSRFields){
+                safeCSRFields[field.name] = field.value;
+            }
+          
             payLoad = safeCSRFields;
+            //console.log("approvedCSRFields",approvedCSRFields,payLoad)
         }
 
       	addFieldToCertPayload(payLoad,"pki-maximum-delegates",delegateSigningAuthority);
@@ -581,8 +765,10 @@
                 if(resp.encryptedIssuerFingerPrint)
                 	issuerFingerPrint = resp.encryptedIssuerFingerPrint;
               	else
-                if(!confirm(`There was a problem encrypting issuer finger print, ${resp.message},\n do you want to issue the certificate with a non-private issuer finger print?\n Ask procurer for confirmation.`))
-                	return;                
+                if(typeof confirm == "function" && !confirm(`There was a problem encrypting issuer finger print, ${resp.message},\n do you want to issue the certificate with a non-private issuer finger print?\n Ask procurer for confirmation.`))
+                	return;
+              	else
+                  	throw `There was a problem encrypting issuer finger print, ${resp.message}.`
             }
           
             certificate.issuer.typesAndValues=[new pkijs.AttributeTypeAndValue({
@@ -616,6 +802,7 @@
             finger_print:finger_print,
             certPEM: pemEncodeCert(certificate),
         })*/
+      	//console.log(pemEncodeCert(certificate))
         return {
             signerSignature,
             certificate,
@@ -641,7 +828,11 @@
 	export  {
       createCSR,
       decryptCSR,
+      prepareCSRDocForSigning,
+      updateAlteredCSR,
       createCert,
       addFieldToCertPayload,
+      createCertField,
+      createSignedDocument,
       configure
     };
