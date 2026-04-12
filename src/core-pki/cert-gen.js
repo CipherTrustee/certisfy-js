@@ -150,30 +150,8 @@
       	return {"status":"success"};
     }
 
-    async function createPKCS10Internal(hashAlg, signAlg,csrText,keyPair) {
-        //#region Initial variables
-        const pkcs10 = new pkijs.CertificationRequest();
-        //#endregion
-        //#region Get a "crypto" extension
+	async function getKeyPair(certAlgo,hashAlg, signAlg,keyPair){
         const crypto = pkijs.getCrypto(true);
-        //#endregion
-        //#region Put a static values
-        pkcs10.version = 0;
-
-        //CN
-        pkcs10.subject.typesAndValues.push(new pkijs.AttributeTypeAndValue({
-            type: "2.5.4.3",
-            value: new asn1js.Utf8String({ value: "Human" })
-        }));
-        const altNames = new pkijs.GeneralNames({
-            names: [
-                new pkijs.GeneralName({
-                    type: /*0*/2,
-                    value: csrText//new asn1js.Utf8String({ value:csrText})
-                })
-            ]
-        });
-        pkcs10.attributes = [];
         //#endregion
         //#region Create a new key pair
         //#region Get default algorithm parameters for key generation
@@ -191,54 +169,92 @@
 			privateKey = await crypto.subtle.importKey(
                 "pkcs8", 
                 base64ToArrayBuffer(kp.privateKey),
-                getConfig().certAlgo, 
+                certAlgo, 
                 true, 
                 ["sign"]);
           
           	 publicKey = await crypto.subtle.importKey(
                     "spki", 
                     base64ToArrayBuffer(kp.publicKey),
-                    getConfig().certAlgo,true,["verify"]);
+                    certAlgo,true,["verify"]);
         }
       	else
         {      
-           let kp = await crypto.generateKey(getConfig().certAlgo, true, /*[ "sign", "encrypt","verify","decrypt"]*/algorithm.usages);
+           let kp = await crypto.generateKey(certAlgo, true, /*[ "sign", "encrypt","verify","decrypt"]*/algorithm.usages);
            privateKey = kp.privateKey;
            publicKey = kp.publicKey;
-        }
-        //#endregion
-        //#region Exporting public key into "subjectPublicKeyInfo" value of PKCS#10
-        await pkcs10.subjectPublicKeyInfo.importKey(publicKey);
-        //#endregion
-        // SubjectKeyIdentifier
-        const subjectKeyIdentifier = await crypto.digest({ name: "SHA-1" }, pkcs10.subjectPublicKeyInfo.subjectPublicKey.valueBlock.valueHexView);
-        pkcs10.attributes.push(new pkijs.Attribute({
-            type: "1.2.840.113549.1.9.14",
-            values: [(new pkijs.Extensions({
-                    extensions: [
-                        new pkijs.Extension({
-                            extnID: "2.5.29.14",
-                            critical: false,
-                            extnValue: (new asn1js.OctetString({ valueHex: subjectKeyIdentifier })).toBER(false)
-                        }),
-                        new pkijs.Extension({
-                            extnID: "2.5.29.17",
-                            critical: false,
-                            extnValue: altNames.toSchema().toBER(false)
-                        })/*,
-                        new pkijs.Extension({
-                            extnID: "1.2.840.113549.1.9.7",
-                            critical: false,
-                            extnValue: (new asn1js.PrintableString({ value: "passwordChallenge" })).toBER(false)
-                        })*/
-                    ]
-                })).toSchema()]
-        }));
-        // Signing final PKCS#10 request
-        await pkcs10.sign(privateKey, hashAlg);
-
+        }    
+      
         let privateKeyPEM = await crypto.subtle.exportKey("pkcs8",privateKey);
         let publicKeyPEM  = await crypto.subtle.exportKey("spki",publicKey);
+      
+      	return {privateKey,publicKey,privateKeyPEM,publicKeyPEM}
+    }
+
+    async function createPKCS10Internal(certAlgo,hashAlg, signAlg,csrText,keyPair,pkcs10Provider,args) {      
+      
+        const {privateKey,publicKey,privateKeyPEM,publicKeyPEM} = await getKeyPair(certAlgo,hashAlg, signAlg,keyPair)
+        
+        let pkcs10;
+        if(typeof pkcs10Provider == "function")
+          	pkcs10 = await pkcs10Provider(...args,certAlgo,hashAlg, signAlg,csrText,keyPair);
+        else
+        {
+            //#region Initial variables
+            pkcs10 = new pkijs.CertificationRequest();
+            //#endregion
+            //#region Get a "crypto" extension
+            const crypto = pkijs.getCrypto(true);
+            //#endregion
+            //#region Put a static values
+            pkcs10.version = 0;
+
+            //CN
+            pkcs10.subject.typesAndValues.push(new pkijs.AttributeTypeAndValue({
+                type: "2.5.4.3",
+                value: new asn1js.Utf8String({ value: "Human" })
+            }));
+            const altNames = new pkijs.GeneralNames({
+                names: [
+                    new pkijs.GeneralName({
+                        type: /*0*/2,
+                        value: csrText//new asn1js.Utf8String({ value:csrText})
+                    })
+                ]
+            });
+            pkcs10.attributes = [];
+
+            //#endregion
+            //#region Exporting public key into "subjectPublicKeyInfo" value of PKCS#10
+            await pkcs10.subjectPublicKeyInfo.importKey(publicKey);
+            //#endregion
+            // SubjectKeyIdentifier
+            const subjectKeyIdentifier = await crypto.digest({ name: "SHA-1" }, pkcs10.subjectPublicKeyInfo.subjectPublicKey.valueBlock.valueHexView);
+            pkcs10.attributes.push(new pkijs.Attribute({
+                type: "1.2.840.113549.1.9.14",
+                values: [(new pkijs.Extensions({
+                        extensions: [
+                            new pkijs.Extension({
+                                extnID: "2.5.29.14",
+                                critical: false,
+                                extnValue: (new asn1js.OctetString({ valueHex: subjectKeyIdentifier })).toBER(false)
+                            }),
+                            new pkijs.Extension({
+                                extnID: "2.5.29.17",
+                                critical: false,
+                                extnValue: altNames.toSchema().toBER(false)
+                            })/*,
+                            new pkijs.Extension({
+                                extnID: "1.2.840.113549.1.9.7",
+                                critical: false,
+                                extnValue: (new asn1js.PrintableString({ value: "passwordChallenge" })).toBER(false)
+                            })*/
+                        ]
+                    })).toSchema()]
+            }));
+            // Signing final PKCS#10 request
+            await pkcs10.sign(privateKey, hashAlg);
+        }
       
         return {
           "csrPEM":toPEM(pkcs10.toSchema().toBER(false),"CERTIFICATE REQUEST"),
@@ -247,7 +263,7 @@
         };
     }
 
-    async function createCSR(csrPayload,isPrivate,idCert,_identityCertSig,certIdentity,keyPair,encKeyPair,payloadEncryptionKey,useStrongIdProofing,includeIdCertSigTrustChain,isForPrivatePersona,encryptIssuerFingerPrint){
+    async function createCSR(csrPayload,isPrivate,idCert,_identityCertSig,certIdentity,keyPair,encKeyPair,payloadEncryptionKey,useStrongIdProofing,includeIdCertSigTrustChain,isForPrivatePersona,encryptIssuerFingerPrint,pkcs10Provider){
       
         /////////////////////////////////Generate keys for asymmetric encryption/////////////////////////////
         let asymDecryptionKeyPEM = null;
@@ -460,7 +476,7 @@
         let cn = [];
         cn[0] = isPrivate?JSON.stringify(maskedPayload):JSON.stringify(plainPayload);//csrPayload;
 
-        const csrResp = await createPKCS10Internal(getConfig().hashAlg, getConfig().signAlg,cn[0],keyPair);
+        const csrResp = await createPKCS10Internal(getConfig().certAlgo,getConfig().hashAlg, getConfig().signAlg,cn[0],keyPair,pkcs10Provider,arguments);
         let csrText = csrResp.csrPEM;
 
         let iv = crypto.getRandomValues(new Uint8Array(12));  
@@ -578,221 +594,233 @@
           return JSON.parse(await AES_GCM_CIPHER.decryptMessage(encryptionKey,csrCipherText));
     }
 
-    async function createCert(csrPEM,startDateText,expireDateText,privateKey,delegateSigningAuthority,lateralLimit,issuer,approvedCSRFields,encryptIssuerFingerPrint,certisfy_stripe_token){
-        const crypto = pkijs.getCrypto(true);
-        let signerPrivateKey =  fromPEM(issuer?issuer.csr.privateKey:privateKey);
+    async function createCert(csrPEM,startDateText,expireDateText,privateKey,delegateSigningAuthority,lateralLimit,issuer,approvedCSRFields,encryptIssuerFingerPrint,x509Provider,certisfy_stripe_token){
       
-        signerPrivateKey =  await crypto.subtle.importKey(
-              "pkcs8", // Key format
-              signerPrivateKey,
-              getConfig().certAlgo, // Algorithm details (modify for your encryption algorithm)
-              true, // Whether the key is extractable
-              ["sign"] // Key usages
-        );
-
-        //Decode the Base64-encoded CSR to binary
-        const binaryCsr = fromPEM(csrPEM);//new Uint8Array(Array.from(atob(csrPEM), c => c.charCodeAt(0)));
-
-        const certificate = new pkijs.Certificate();
-        //Import the CSR using PKIjs
-        const csr = pkijs.CertificationRequest.fromBER(binaryCsr);  
-        
-
-       //#region Parse and display information about "subject"
-        const typemap = {
-            "2.5.4.6": "C",
-            "2.5.4.11": "OU",
-            "2.5.4.10": "O",
-            "2.5.4.3": "CN",
-            "2.5.4.7": "L",
-            "2.5.4.8": "ST",
-            "2.5.4.12": "T",
-            "2.5.4.42": "GN",
-            "2.5.4.43": "I",
-            "2.5.4.4": "SN",
-            "1.2.840.113549.1.9.1": "E-mail"
-        };  
-
-        let certCN = null;
-        let payLoad = null;
-        for (let i = 0; i < csr.subject.typesAndValues.length; i++) {
-            let typeval = typemap[csr.subject.typesAndValues[i].type];
-            if (typeof typeval === "undefined")
-                typeval = csr.subject.typesAndValues[i].type;
-
-            const subjval = csr.subject.typesAndValues[i].value.valueBlock.value;
-
-            if (typeval === "CN") {
-                certCN = subjval;
-            }
-        }  
-
-
-        //extract payload
-        for (let i = 0; i < csr.attributes.length; i++) {
-
-          if(csr.attributes[i].type == "1.2.840.113549.1.9.14"){
-            let extensions = pkijs.Extensions.fromBER(csr.attributes[i].values[0].toBER(false)).extensions;
-
-            for (let j = 0; j < extensions.length; j++) {
-                if(extensions[j].extnID == "2.5.29.17"){
-
-                     let altNameBin = asn1js.fromBER(extensions[j].extnValue.toBER(false)).result;              
-                     let altNames = pkijs.GeneralNames.fromBER(altNameBin.getValue());
-                     let altName = altNames.names[0].value;
-
-                     //let altName = altNameBin.valueBlock.value[0].valueBlock.value[0].valueBlock.value[0].valueBlock.value
-                     payLoad = JSON.parse(altName);
-                     break;
-                }
-            }
-
-            break;
-          }
-        }
-
-        //CN
-        certificate.subject.typesAndValues=[new pkijs.AttributeTypeAndValue({
-            type: "2.5.4.3",
-            value: new asn1js.Utf8String({ value: certCN })
-        })];  
       
-      	if(approvedCSRFields){
-            let safeCSRFields = {};
-          	let preApprovedFields = ["pki-asym-encryption-key","pki-cert-version"];
-          
-          	//enforce strict CSR match to approved fields
-            for(let fieldName in payLoad){
-              
-              	if(preApprovedFields.includes(fieldName)){
-                   safeCSRFields[fieldName] = payLoad[fieldName];
-                   continue;
-                }
-              
-                /*for(let j=0;j<approvedCSRFields.length;j++){                  
-                   if(fieldName == approvedCSRFields[j].name && payLoad[fieldName] == approvedCSRFields[j].value){
-                      safeCSRFields[fieldName] = payLoad[fieldName];
-                      break;
-                   }
-                }*/
-              
-              	const unapprovedField =  (!safeCSRFields[fieldName] && !approvedCSRFields.find(f=>f.name == fieldName /*&& f.isOverride*/));
-              	//if it is doesn't match approved field by name & value, and isn't a value override
-                if(unapprovedField){
-                    /*if(typeof confirm == "function" && !confirm(`Unapproved field '${fieldName}' found in certificate request, it will be ignored.\n Do you want to continue with issuing the certificate?`))
-                        return;
-                    else*/
-                        console.log(`Unapproved field '${fieldName}' found in certificate request, it will be ignored.`);
-                }
-            }
-          
-          	//incorporate all approved fields
-          	for(const field of approvedCSRFields){
-                safeCSRFields[field.name] = field.value;
-            }
-          
-            payLoad = safeCSRFields;
-            //console.log("approvedCSRFields",approvedCSRFields,payLoad)
-        }
-
-      	addFieldToCertPayload(payLoad,"pki-maximum-delegates",delegateSigningAuthority);
-        addFieldToCertPayload(payLoad,"pki-maximum-issuance",lateralLimit);
-        addFieldToCertPayload(payLoad,"certisfy-stripe-token",certisfy_stripe_token);
+      	let certificate;
+        let signerSignature;
       
-      	if(encryptIssuerFingerPrint){
-        	addFieldToCertPayload(payLoad,"pki-is-private-issuer","true");        
+      	if(typeof x509Provider == "function"){
+        	const resp = await x509Provider(...arguments);
+            certificate = resp.certificate;
+          	signerSignature = resp.signerSignature;
         }
-
-        const altNames = new pkijs.GeneralNames({
-            names: [
-                new pkijs.GeneralName({
-                    type: /*0*/2,
-                    value: JSON.stringify(payLoad)//new asn1js.Utf8String({ value:JSON.stringify(payLoad)})
-                })
-            ]
-        });    
-
-        //console.log("payLoad");
-        //console.log(payLoad);
-        //console.log(csr)
-
-        const subjectKeyIdentifier = await crypto.digest({ name: "SHA-1" }, csr.subjectPublicKeyInfo.subjectPublicKey.valueBlock.valueHexView);
-        certificate.subjectPublicKeyInfo = csr.subjectPublicKeyInfo;
-        certificate.signatureAlgorithm = csr.signatureAlgorithm;
-        certificate.extensions=[
-            new pkijs.Extension({
-              extnID: "2.5.29.14",
-              critical: false,
-              extnValue: (new asn1js.OctetString({ valueHex: subjectKeyIdentifier })).toBER(false)
-            }),
-            new pkijs.Extension({
-              extnID: "2.5.29.17",
-              critical: false,
-              extnValue: altNames.toSchema().toBER(false)
-            })
-        ];
-
-        /*
-         certificate.attributes=[new pkijs.Attribute({
-            type: "1.2.840.113549.1.9.14",
-            values: [(new pkijs.Extensions({
-                    extensions: [
-                        new pkijs.Extension({
-                            extnID: "2.5.29.14",
-                            critical: false,
-                            extnValue: (new asn1js.OctetString({ valueHex: subjectKeyIdentifier })).toBER(false)
-                        }),
-                        new pkijs.Extension({
-                            extnID: "2.5.29.17",
-                            critical: false,
-                            extnValue: altNames.toSchema().toBER(false)
-                        })
-                    ]
-                })).toSchema()]
-        })];*/
-
-        certificate.version = 2;
-        certificate.serialNumber = new asn1js.Integer({ value: 1 });
-
-        let signerSignature = null;
-        if(issuer && issuer.finger_print && issuer.finger_print.length>0){
-          	let issuerFingerPrint = issuer.finger_print;
-          
-          	if(encryptIssuerFingerPrint){
-      			let signedString = Object.assign({},{"plainFields":[{"pki-action":"encrypt-issuer-fingerprint"},{"finger-print":issuerFingerPrint}]});
-                const resp = await encryptIssuerFingerPrint(await signClaim(issuer,JSON.stringify(signedString)));
-              
-                if(resp.encryptedIssuerFingerPrint)
-                	issuerFingerPrint = resp.encryptedIssuerFingerPrint;
-              	else
-                if(typeof confirm == "function" && !confirm(`There was a problem encrypting issuer finger print, ${resp.message},\n do you want to issue the certificate with a non-private issuer finger print?\n Ask procurer for confirmation.`))
-                	return;
-              	else
-                  	throw `There was a problem encrypting issuer finger print, ${resp.message}.`
-            }
-          
-            certificate.issuer.typesAndValues=[new pkijs.AttributeTypeAndValue({
-                type: "2.5.4.3",
-                value: new asn1js.Utf8String({ value: issuerFingerPrint })
-            })];
-            signerSignature = JSON.stringify(await signText(issuer,randomUUID(crypto),false));
-        }
-        else
+      	else
         {
-            certificate.issuer.typesAndValues=[new pkijs.AttributeTypeAndValue({
+            const crypto = pkijs.getCrypto(true);
+            let signerPrivateKey =  fromPEM(issuer?issuer.csr.privateKey:privateKey);
+
+            signerPrivateKey =  await crypto.subtle.importKey(
+                  "pkcs8", // Key format
+                  signerPrivateKey,
+                  getConfig().certAlgo, // Algorithm details (modify for your encryption algorithm)
+                  true, // Whether the key is extractable
+                  ["sign"] // Key usages
+            );
+
+            //Decode the Base64-encoded CSR to binary
+            const binaryCsr = fromPEM(csrPEM);//new Uint8Array(Array.from(atob(csrPEM), c => c.charCodeAt(0)));
+
+            certificate = new pkijs.Certificate();
+            //Import the CSR using PKIjs
+            const csr = pkijs.CertificationRequest.fromBER(binaryCsr);        
+
+           //#region Parse and display information about "subject"
+            const typemap = {
+                "2.5.4.6": "C",
+                "2.5.4.11": "OU",
+                "2.5.4.10": "O",
+                "2.5.4.3": "CN",
+                "2.5.4.7": "L",
+                "2.5.4.8": "ST",
+                "2.5.4.12": "T",
+                "2.5.4.42": "GN",
+                "2.5.4.43": "I",
+                "2.5.4.4": "SN",
+                "1.2.840.113549.1.9.1": "E-mail"
+            };  
+
+            let certCN = null;
+            let payLoad = null;
+            for (let i = 0; i < csr.subject.typesAndValues.length; i++) {
+                let typeval = typemap[csr.subject.typesAndValues[i].type];
+                if (typeof typeval === "undefined")
+                    typeval = csr.subject.typesAndValues[i].type;
+
+                const subjval = csr.subject.typesAndValues[i].value.valueBlock.value;
+
+                if (typeval === "CN") {
+                    certCN = subjval;
+                }
+            }  
+
+
+            //extract payload
+            for (let i = 0; i < csr.attributes.length; i++) {
+
+              if(csr.attributes[i].type == "1.2.840.113549.1.9.14"){
+                let extensions = pkijs.Extensions.fromBER(csr.attributes[i].values[0].toBER(false)).extensions;
+
+                for (let j = 0; j < extensions.length; j++) {
+                    if(extensions[j].extnID == "2.5.29.17"){
+
+                         let altNameBin = asn1js.fromBER(extensions[j].extnValue.toBER(false)).result;              
+                         let altNames = pkijs.GeneralNames.fromBER(altNameBin.getValue());
+                         let altName = altNames.names[0].value;
+
+                         //let altName = altNameBin.valueBlock.value[0].valueBlock.value[0].valueBlock.value[0].valueBlock.value
+                         payLoad = JSON.parse(altName);
+                         break;
+                    }
+                }
+
+                break;
+              }
+            }
+
+            //CN
+            certificate.subject.typesAndValues=[new pkijs.AttributeTypeAndValue({
                 type: "2.5.4.3",
-                value: new asn1js.Utf8String({ value: "Prometheus" })
-            })];
+                value: new asn1js.Utf8String({ value: certCN })
+            })];  
+
+            if(approvedCSRFields){
+                let safeCSRFields = {};
+                let preApprovedFields = ["pki-asym-encryption-key","pki-cert-version"];
+
+                //enforce strict CSR match to approved fields
+                for(let fieldName in payLoad){
+
+                    if(preApprovedFields.includes(fieldName)){
+                       safeCSRFields[fieldName] = payLoad[fieldName];
+                       continue;
+                    }
+
+                    /*for(let j=0;j<approvedCSRFields.length;j++){                  
+                       if(fieldName == approvedCSRFields[j].name && payLoad[fieldName] == approvedCSRFields[j].value){
+                          safeCSRFields[fieldName] = payLoad[fieldName];
+                          break;
+                       }
+                    }*/
+
+                    const unapprovedField =  (!safeCSRFields[fieldName] && !approvedCSRFields.find(f=>f.name == fieldName /*&& f.isOverride*/));
+                    //if it is doesn't match approved field by name & value, and isn't a value override
+                    if(unapprovedField){
+                        /*if(typeof confirm == "function" && !confirm(`Unapproved field '${fieldName}' found in certificate request, it will be ignored.\n Do you want to continue with issuing the certificate?`))
+                            return;
+                        else*/
+                            console.log(`Unapproved field '${fieldName}' found in certificate request, it will be ignored.`);
+                    }
+                }
+
+                //incorporate all approved fields
+                for(const field of approvedCSRFields){
+                    safeCSRFields[field.name] = field.value;
+                }
+
+                payLoad = safeCSRFields;
+                //console.log("approvedCSRFields",approvedCSRFields,payLoad)
+            }
+
+            addFieldToCertPayload(payLoad,"pki-maximum-delegates",delegateSigningAuthority);
+            addFieldToCertPayload(payLoad,"pki-maximum-issuance",lateralLimit);
+            addFieldToCertPayload(payLoad,"certisfy-stripe-token",certisfy_stripe_token);
+
+            if(encryptIssuerFingerPrint){
+                addFieldToCertPayload(payLoad,"pki-is-private-issuer","true");        
+            }
+
+            const altNames = new pkijs.GeneralNames({
+                names: [
+                    new pkijs.GeneralName({
+                        type: /*0*/2,
+                        value: JSON.stringify(payLoad)//new asn1js.Utf8String({ value:JSON.stringify(payLoad)})
+                    })
+                ]
+            });    
+
+            //console.log("payLoad");
+            //console.log(payLoad);
+            //console.log(csr)
+
+            const subjectKeyIdentifier = await crypto.digest({ name: "SHA-1" }, csr.subjectPublicKeyInfo.subjectPublicKey.valueBlock.valueHexView);
+            certificate.subjectPublicKeyInfo = csr.subjectPublicKeyInfo;
+            certificate.signatureAlgorithm = csr.signatureAlgorithm;
+            certificate.extensions=[
+                new pkijs.Extension({
+                  extnID: "2.5.29.14",
+                  critical: false,
+                  extnValue: (new asn1js.OctetString({ valueHex: subjectKeyIdentifier })).toBER(false)
+                }),
+                new pkijs.Extension({
+                  extnID: "2.5.29.17",
+                  critical: false,
+                  extnValue: altNames.toSchema().toBER(false)
+                })
+            ];
+
+            /*
+             certificate.attributes=[new pkijs.Attribute({
+                type: "1.2.840.113549.1.9.14",
+                values: [(new pkijs.Extensions({
+                        extensions: [
+                            new pkijs.Extension({
+                                extnID: "2.5.29.14",
+                                critical: false,
+                                extnValue: (new asn1js.OctetString({ valueHex: subjectKeyIdentifier })).toBER(false)
+                            }),
+                            new pkijs.Extension({
+                                extnID: "2.5.29.17",
+                                critical: false,
+                                extnValue: altNames.toSchema().toBER(false)
+                            })
+                        ]
+                    })).toSchema()]
+            })];*/
+
+            certificate.version = 2;
+            certificate.serialNumber = new asn1js.Integer({ value: 1 });
+
+
+            if(issuer && issuer.finger_print && issuer.finger_print.length>0){
+                let issuerFingerPrint = issuer.finger_print;
+
+                if(encryptIssuerFingerPrint){
+                    let signedString = Object.assign({},{"plainFields":[{"pki-action":"encrypt-issuer-fingerprint"},{"finger-print":issuerFingerPrint}]});
+                    const resp = await encryptIssuerFingerPrint(await signClaim(issuer,JSON.stringify(signedString)));
+
+                    if(resp.encryptedIssuerFingerPrint)
+                        issuerFingerPrint = resp.encryptedIssuerFingerPrint;
+                    else
+                    if(typeof confirm == "function" && !confirm(`There was a problem encrypting issuer finger print, ${resp.message},\n do you want to issue the certificate with a non-private issuer finger print?\n Ask procurer for confirmation.`))
+                        return;
+                    else
+                        throw `There was a problem encrypting issuer finger print, ${resp.message}.`
+                }
+
+                certificate.issuer.typesAndValues=[new pkijs.AttributeTypeAndValue({
+                    type: "2.5.4.3",
+                    value: new asn1js.Utf8String({ value: issuerFingerPrint })
+                })];
+                signerSignature = JSON.stringify(await signText(issuer,randomUUID(crypto),false));
+            }
+            else
+            {
+                certificate.issuer.typesAndValues=[new pkijs.AttributeTypeAndValue({
+                    type: "2.5.4.3",
+                    value: new asn1js.Utf8String({ value: "Prometheus" })
+                })];
+            }
+
+            certificate.notBefore.value = new Date();
+            certificate.notBefore.value.setFullYear(parseInt(startDateText.split("/")[2]),parseInt(startDateText.split("/")[0])-1,parseInt(startDateText.split("/")[1]));
+
+            certificate.notAfter.value = new Date();
+            certificate.notAfter.value.setFullYear(parseInt(expireDateText.split("/")[2]),parseInt(expireDateText.split("/")[0])-1,parseInt(expireDateText.split("/")[1]));
+
+            await certificate.sign(signerPrivateKey, getConfig().hashAlg);  
         }
-
-        certificate.notBefore.value = new Date();
-        certificate.notBefore.value.setFullYear(parseInt(startDateText.split("/")[2]),parseInt(startDateText.split("/")[0])-1,parseInt(startDateText.split("/")[1]));
-
-        certificate.notAfter.value = new Date();
-        certificate.notAfter.value.setFullYear(parseInt(expireDateText.split("/")[2]),parseInt(expireDateText.split("/")[0])-1,parseInt(expireDateText.split("/")[1]));
-
-        await certificate.sign(signerPrivateKey, getConfig().hashAlg);  
-
+      
         let finger_print = await getCertFingerPrint(certificate);
         //let finger_print = hmacUtil.hash(certificate.toSchema(true).toBER(false));
 
