@@ -259,6 +259,23 @@
       const exportedPublicKeyAsBase64 = btoa(exportedPublicKeyAsString);
       return exportedPublicKeyAsBase64;
     }    
+
+    function base64ToHex(str) {
+      const raw = atob(str);
+      let result = '';
+      for (let i = 0; i < raw.length; i++) {
+        const hex = raw.charCodeAt(i).toString(16);
+        result += (hex.length === 2 ? hex : '0' + hex);
+      }
+      return result.toUpperCase();
+    }
+
+    function hexToBase64(hexString) {
+      return btoa(hexString.match(/\w{2}/g).map(function(a) {
+        return String.fromCharCode(parseInt(a, 16));
+      }).join(""));
+    }
+
         
     // Function to convert a base64-encoded string to an ArrayBuffer
     function xbase64ToArrayBuffer(base64) {
@@ -1284,5 +1301,7 @@
         decodePEM,
         base64ToArrayBuffer,
         base64EncodeBin,
-        base64DecodeToBin
+        base64DecodeToBin,
+      	base64ToHex,
+		hexToBase64
 	}
