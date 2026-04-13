@@ -56,26 +56,26 @@
 
 	async function getCertDerivationSourceFingerPrint(cert){
               
-        if(cert.derived_from_cert_finger_print && cert.derived_from_cert_finger_print.trim().length>0)
-          return cert.derived_from_cert_finger_print;
+        if(cert.derivation_source_finger_print && cert.derivation_source_finger_print.trim().length>0)
+          return cert.derivation_source_finger_print;
       
         return getCertPayloadField(cert.cert_text,"pki-cert-is-derived-from");      
     }
 
 	async function getCertDerivationSourceIssuerFingerPrint(cert){
               
-        if(cert.derived_from_cert_issuer_finger_print && cert.derived_from_cert_issuer_finger_print.trim().length>0)
-          return cert.derived_from_cert_issuer_finger_print;
+        if(cert.derivation_source_issuer_finger_print && cert.derivation_source_issuer_finger_print.trim().length>0)
+          return cert.derivation_source_issuer_finger_print;
       
         return getCertPayloadField(cert.cert_text,"pki-cert-is-derived-from-issuer");      
     }
 
 	function derivationSourceIsPrivate(cert){
-		return (certPayloadHasField(cert.cert_text,"pki-is-private-derived-from-cert","true") && !cert.derived_from_cert_finger_print);
+		return (certPayloadHasField(cert.cert_text,"pki-is-private-derived-from-cert","true") && !cert.derivation_source_finger_print);
     }
 
 	function derivationSourceIssuerIsPrivate(cert){
-		return (certPayloadHasField(cert.cert_text,"pki-is-private-derived-from-cert-issuer","true") && !cert.derived_from_cert_issuer_finger_print);
+		return (certPayloadHasField(cert.cert_text,"pki-is-private-derived-from-cert-issuer","true") && !cert.derivation_source_issuer_finger_print);
     }
 
     /*

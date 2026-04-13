@@ -304,6 +304,7 @@
       setAPIInfo,
       updateCertTrustchainPrivacy,
       updateCertDerivationSourcePrivacy,
+      updateCertDerivationSourceIssuerPrivacy,
       getEncryptedIssuerFingerPrint,
       getEmbededSignature,      
       

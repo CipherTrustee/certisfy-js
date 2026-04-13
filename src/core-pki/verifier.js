@@ -211,7 +211,7 @@
                            	  //chain.
                               if(derivationSourceIsPrivate(chain[0])){
                                   let isValidPrivateChain = await verifyPrivateCertChain(useChain);
-                                  //console.log("platform validate",isValidPrivateChain,validate,validChain/*,chain[0].isTrustworthy*/)
+                                  //console.log("platform validate",isValidPrivateChain,validate,validChain,useChain/*,chain[0].isTrustworthy*/)
                                 
                                   certVerification["certificateVerified"]= ((typeof validate != "undefined" && validate == true) && validChain && isValidPrivateChain /*&& chain[0].isTrustworthy*/);
                                   return certVerification;
@@ -766,22 +766,27 @@
       
       	const signedString = [];
       
-      	signedString.push(trustChain.certs[0].finger_print);
+      	for(const cert of trustChain.certs){
+      		signedString.push(cert.finger_print);
+        }
       
       	signedString.push(trustChain.validfrom_date);
         signedString.push(trustChain.expiration_date);
       
         signedString.push(trustChain.isValid);
         signedString.push(trustChain.isTrustworthy);
+      
+      	if(typeof trustChain.isTrustedDerivation != "undefined")
+          	signedString.push(trustChain.isTrustedDerivation);
 
       	signedString.push(`timestamp=${trustChain.signature.timestamp}`);
       
       	for(const rootCert of getConfig().trustRoots){
             const signerCert = decodeCertificate(/*getConfig().trustChainRoot.cert_text*/rootCert.cert_text);
             let verified = await verifyText(signedString.join(""),trustChain.signature.signature,signerCert);
-
+			//console.log(`checking root ${rootCert.finger_print},${verified},${validChain}`,trustChain)
           	if(verified)
-            	return (validChain && verified);
+            	return (validChain && verified && trustChain.isValid && trustChain.isTrustworthy && (typeof trustChain.isTrustedDerivation == "undefined" || trustChain.isTrustedDerivation == true));
         }
       	return false;
     }
@@ -1111,11 +1116,11 @@
 						     let chain = await getCertChainWithStatusFromStore(trustChain.certs);
                            
                              if(!derivationSourceIsPrivate(chain[0])){//derivation source is no longer private                                
-                                trustChain.certs[0].derived_from_cert_finger_print = chain[0].derived_from_cert_finger_print;                                
+                                trustChain.certs[0].derivation_source_finger_print = chain[0].derivation_source_finger_print;                                
                              }
                            
                              if(!derivationSourceIssuerIsPrivate(chain[0])){//derivation source issuer is no longer private                                
-                                trustChain.certs[0].derived_from_cert_issuer_finger_print = chain[0].derived_from_cert_issuer_finger_print;                                
+                                trustChain.certs[0].derivation_source_issuer_finger_print = chain[0].derivation_source_issuer_finger_print;                                
                              }
                            
                            
