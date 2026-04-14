@@ -2,7 +2,7 @@
 
 This is the core implementation SDK of [Certisfy](https://certisfy.com) for Javascript. 
 
-([Certisfy](https://certisfy.com)) is a comprehensive framework,platform & toolkit for solving human-trust related problems on the internet
+[Certisfy](https://certisfy.com) is a comprehensive framework,platform & toolkit for solving human-trust related problems on the internet
 via information verification and trust projection. 
 Certisfy can be used to address a large class of trust related needs for online use cases; and even offline use cases.
 
