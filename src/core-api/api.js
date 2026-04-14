@@ -52,7 +52,7 @@
       	return new Promise((resolve,reject)=>{          
 			sendRequest(Object.assign({
               "pki_action":"get-cert"
-            },params)).
+            },params,{"fingerprint":(params.finger_print || params.fingerprint)})).
             then(function(resp){
                 resolve(resp);
             })
