@@ -407,8 +407,8 @@
                 let fieldVal = field.value;
                 let fieldClaimObject = textToClaimObject(field.value);
 
-                const normizeFieldNames = ["pki-vouch-for-claim"];
-                field.name =  normizeFieldNames.find(f=>field.name.startsWith(f))?normizeFieldNames.find(f=>field.name.startsWith(f)):field.name;
+                const normalizeFieldNames = ["pki-vouch-for-claim"];
+                field.name =  normalizeFieldNames.find(f=>field.name.startsWith(f))?normalizeFieldNames.find(f=>field.name.startsWith(f)):field.name;
 
                 if(fieldClaimObject && fieldsContainVouchedForClaims(fieldClaimObject.plainFields))
                   field.name =  "pki-claim-vouch";

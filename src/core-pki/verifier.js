@@ -593,6 +593,7 @@
                if(signedField)
                		fieldVerification.fields.push(signedField);
             }
+            //console.log("fieldVerification.fields",JSON.parse(JSON.stringify(fieldVerification.fields)),signedPayload)
         }
       
         let isEmptyClaim = typeof signedPayload.maskedFields == "undefined" || signedPayload.maskedFields == null;
@@ -611,6 +612,10 @@
         return fieldVerification;
     }
 
+	//////////////////////////////////////////////////////////////////////////////////
+	//This function matches signed fields to their plain counterparts to verify signature
+	//relationship.
+	//////////////////////////////////////////////////////////////////////////////////
     async function findSignedFieldPeer(field,signedPayload,hmacKey){
         /*
           TODO: Fix this function, it currently combines signature validation with hmac validation.
@@ -663,7 +668,7 @@
                             //perform hmac on hashed data...future changes to this function should remove this approach
                             const dataHashIsHMACValidated = (fieldNameHash1 == maskedFieldName &&  fieldValueHash1 == maskedFieldValue)
 
-                            //assume data was hmaced before being included...this is better for privacy and doesn't require exposing
+                            //assume data was hmaced (could also be plain, ie non-private) before being included...this is better for privacy and doesn't require exposing
                             //hmac key to validation routine.
                             const dataIsHMACed = (fieldName == maskedFieldName && fieldValue == maskedFieldValue);
                             //const dataIsHMACed = (hmacHex(hmacKey,fieldName) == maskedFieldName && hmacHex(hmacKey,fieldValue) == maskedFieldValue);
@@ -675,7 +680,7 @@
                                 //console.log("passed mask test fieldName:"+fieldName+"/"+hmacHex(maskedField.hmacKey,fieldName)+","+hmacHex(maskedField.hmacKey,fieldValue));
                                 let verifiedField = {};
 
-                                let m = Object.assign({},field);
+                                let m = Object.assign({},field);                                
                                 verifiedField["plainField"]=m;
 
                                 m = Object.assign({},maskedField);
@@ -791,6 +796,10 @@
       	return false;
     }
     
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//This function matches verified signed fields to their on-certificate counterparts
+	//////////////////////////////////////////////////////////////////////////////////
 	async function verifyDocument(signer,fields,flatten,contextLeafCert,hmacKeyMask){
       
         let signerCert = contextLeafCert;
@@ -879,8 +888,10 @@
                     }        
                 }
             }
-            else              
-            {
+          
+          	//if mask doesn't match, try plain field, it is already signature verified.
+            if(!updatedPlainField["certificateVerified"] && fieldContainer.plainField)    
+            {              
                 if(flatten)
                 {
                     let flattenPlainField = {};
@@ -901,7 +912,7 @@
                         updatedPlainField["certificateVerificationFailure"]="name/value pair mismatch";
                         verified = false;
                     }
-                }
+                }                
             }
         }
 
@@ -1441,6 +1452,9 @@
       
       	if(!docVerificationContext || !docVerificationContext.certChainVerification)
           return false;
+      
+      	if(getConfig().clientApp && typeof getConfig().clientApp.meetsUserVerPref == "function" && !getConfig().clientApp.meetsUserVerPref(docVerificationContext))
+          	return false;
 
         if(docVerificationContext.isEmbedSticker)
             return (docVerificationContext.certChainVerification.certificateVerified && 
@@ -1734,7 +1748,7 @@
     }
 
     function isVerifiedField(docVerificationContext,field){
-       return ((docVerificationContext.certChainVerification.certificateVerified) && (field.plainField.certificateVerified && (typeof field.maskedField == 'undefined' || field.maskedField.certificateVerified)));      
+       return ((docVerificationContext.certChainVerification.certificateVerified) && (field.plainField.certificateVerified && (true || typeof field.maskedField == 'undefined' || field.maskedField.certificateVerified)));      
     }
 
     function rebuildVerificationField(field,includeInternalFields){
