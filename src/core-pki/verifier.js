@@ -1451,10 +1451,10 @@
     function isClaimTrustworthy(docVerificationContext){
       
       	if(!docVerificationContext || !docVerificationContext.certChainVerification)
-          return false;
+            return false;
       
       	if(getConfig().clientApp && typeof getConfig().clientApp.meetsUserVerPref == "function" && !getConfig().clientApp.meetsUserVerPref(docVerificationContext))
-          	return false;
+          	return false;        
 
         if(docVerificationContext.isEmbedSticker)
             return (docVerificationContext.certChainVerification.certificateVerified && 
