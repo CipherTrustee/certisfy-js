@@ -83,8 +83,10 @@
                 	resolve(resp);
                 }
                 else
-                {                    
+                {
+                    resolve(resp);
                  	console.error((resp.message || resp.error_message));
+                  	throw (resp.message || resp.error_message)
                 }
             })
         });      
@@ -244,7 +246,7 @@
       	delete idFields.plainFields;
         */
       
-        let idCertSig = await generateIDSig(idAnchorCertObj,pkiSpUri,enclosedSig,includeTrustChain);
+        let idCertSig = await generateIDSig(idAnchorCertObj,pkiSpUri,includeTrustChain);
       
         return await wrapCertIdentity(JSON.stringify(idCertSig),pkiSpUri,enclosedSig,includeTrustChain,vouchedForClaimIdentities,isForPrivatePersona);
     }
